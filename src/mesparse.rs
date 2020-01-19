@@ -1,11 +1,12 @@
+use crate::cipher::TuyaCipher;
 use failure::{Error, Fail};
 use std::cmp::PartialEq;
 use std::str::FromStr;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, PartialEq)]
-enum TuyaVersion {
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) enum TuyaVersion {
     ThreeOne,
     ThreeThree,
 }
@@ -32,13 +33,18 @@ impl FromStr for TuyaVersion {
 pub struct MessageParser {
     version: TuyaVersion,
     key: String,
+    cipher: TuyaCipher,
 }
 
 impl MessageParser {
-    pub fn create(version: String, key: String) -> Result<MessageParser> {
+    pub fn create(ver: String, k: String) -> Result<MessageParser> {
+        let version = TuyaVersion::from_str(&ver)?;
+        let key = verify_key(k)?;
+        let cipher = TuyaCipher::create(key.clone(), version.clone());
         Ok(MessageParser {
-            version: TuyaVersion::from_str(&version)?,
-            key: verify_key(key)?,
+            version,
+            key,
+            cipher,
         })
     }
 }
