@@ -30,6 +30,8 @@ impl FromStr for TuyaVersion {
     }
 }
 
+struct Message {}
+
 pub struct MessageParser {
     version: TuyaVersion,
     key: String,
@@ -47,6 +49,8 @@ impl MessageParser {
             cipher,
         })
     }
+
+    // fn parse_packet(buf: Vec<u8>) -> Result()
 }
 
 fn verify_key(key: String) -> Result<String> {
