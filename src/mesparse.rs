@@ -6,8 +6,8 @@ use std::io::{BufReader, Read};
 use std::str::FromStr;
 
 pub type Result<T> = std::result::Result<T, Error>;
-const PrefixBytes: [u8; 4] = [0x00, 0x00, 0x55, 0xAA];
-const SuffixBytes: [u8; 4] = [0x00, 0x00, 0xAA, 0x55];
+const PrefixBytes: u32 = 0x000055AA;
+const SuffixBytes: u32 = 0x0000AA55;
 
 enum CommandType {
     Udp = 0,
@@ -98,8 +98,8 @@ impl MessageParser {
     }
 }
 
-fn verify_prefix(prefix: &[u8; 4]) -> Result<()> {
-    if prefix.iter().zip(PrefixBytes.iter()).all(|(a, b)| a == b) {
+fn verify_prefix(prefix: u32) -> Result<()> {
+    if prefix == PrefixBytes {
         return Ok(());
     }
     Err(ErrorKind::BadPackagePrefix.into())
@@ -111,7 +111,8 @@ pub fn parse_packets(buf: &[u8]) -> Result<Vec<Message>> {
     let mut prefix = [0; 4];
     buf.read_exact(&mut prefix)
         .context(ErrorKind::BadPackagePrefix)?;
-    verify_prefix(&prefix)?;
+    verify_prefix(u32::from_be_bytes(prefix))?;
+
     Ok(packets)
 }
 
@@ -137,8 +138,8 @@ fn verify_key_lenght_not_16_gives_error() {
 
 #[test]
 fn verify_package_prefix() {
-    assert!(verify_prefix(&PrefixBytes).is_ok());
-    assert!(verify_prefix(&SuffixBytes).is_err());
+    assert!(verify_prefix(PrefixBytes).is_ok());
+    assert!(verify_prefix(SuffixBytes).is_err());
 }
 
 #[test]
