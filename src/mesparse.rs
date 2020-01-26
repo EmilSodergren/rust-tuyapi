@@ -6,8 +6,8 @@ use std::io::{BufReader, Read};
 use std::str::FromStr;
 
 pub type Result<T> = std::result::Result<T, Error>;
-const PrefixBytes: [u32; 4] = [0x00, 0x00, 0x55, 0xAA];
-const SuffixBytes: [u32; 4] = [0x00, 0x00, 0xAA, 0x55];
+const PrefixBytes: [u8; 4] = [0x00, 0x00, 0x55, 0xAA];
+const SuffixBytes: [u8; 4] = [0x00, 0x00, 0xAA, 0x55];
 
 enum CommandType {
     Udp = 0,
@@ -73,7 +73,7 @@ impl FromStr for TuyaVersion {
     }
 }
 
-struct Message {
+pub struct Message {
     data: String,
     command: CommandType,
     seqNr: u32,
@@ -98,13 +98,20 @@ impl MessageParser {
     }
 }
 
-fn parse_packets(buf: &[u8]) -> Result<Vec<Message>> {
+fn verify_prefix(prefix: &[u8; 4]) -> Result<()> {
+    if prefix.iter().zip(PrefixBytes.iter()).all(|(a, b)| a == b) {
+        return Ok(());
+    }
+    Err(ErrorKind::BadPackagePrefix.into())
+}
+
+pub fn parse_packets(buf: &[u8]) -> Result<Vec<Message>> {
     let packets: Vec<Message> = Vec::new();
     let mut buf = BufReader::new(buf);
     let mut prefix = [0; 4];
     buf.read_exact(&mut prefix)
         .context(ErrorKind::BadPackagePrefix)?;
-
+    verify_prefix(&prefix)?;
     Ok(packets)
 }
 
@@ -129,7 +136,10 @@ fn verify_key_lenght_not_16_gives_error() {
 }
 
 #[test]
-fn verify_package_prefix() {}
+fn verify_package_prefix() {
+    assert!(verify_prefix(&PrefixBytes).is_ok());
+    assert!(verify_prefix(&SuffixBytes).is_err());
+}
 
 #[test]
 fn verify_parse_mqttversion() {
