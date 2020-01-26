@@ -1,9 +1,48 @@
 use crate::cipher::TuyaCipher;
-use failure::{Error, Fail};
+use crate::error::{Error, ErrorKind};
+use failure::ResultExt;
 use std::cmp::PartialEq;
+use std::io::{BufReader, Read};
 use std::str::FromStr;
 
 pub type Result<T> = std::result::Result<T, Error>;
+const PrefixBytes: [u32; 4] = [0x00, 0x00, 0x55, 0xAA];
+const SuffixBytes: [u32; 4] = [0x00, 0x00, 0xAA, 0x55];
+
+enum CommandType {
+    Udp = 0,
+    ApConfig = 1,
+    Active = 2,
+    Bind = 3,
+    RenameGw = 4,
+    RenameDevice = 5,
+    Unbind = 6,
+    Control = 7,
+    Status = 8,
+    HeartBeat = 9,
+    DpQuery = 10,
+    QueryWifi = 11,
+    TokenBind = 12,
+    ControlNew = 13,
+    EnableWifi = 14,
+    DpQueryNew = 16,
+    SceneExecute = 17,
+    UdpNew = 19,
+    ApConfigNew = 20,
+    LanGwActive = 240,
+    LanSubDevRequest = 241,
+    LanDeleteSubDev = 242,
+    LanReportSubDev = 243,
+    LanScene = 244,
+    LanPublishCloudConfig = 245,
+    LanPublishAppConfig = 246,
+    LanExportAppConfig = 247,
+    LanPublishScenePanel = 248,
+    LanRemoveGw = 249,
+    LanCheckGwUpdate = 250,
+    LanGwUpdate = 251,
+    LanSetGwChannel = 252,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum TuyaVersion {
@@ -24,13 +63,21 @@ impl FromStr for TuyaVersion {
                     return Ok(TuyaVersion::ThreeThree);
                 }
             }
-            return Err(E::VersionError(String::from(version[0]), String::from(version[1])).into());
+            return Err(ErrorKind::VersionError(
+                String::from(version[0]),
+                String::from(version[1]),
+            )
+            .into());
         }
-        Err(E::VersionError(String::from(""), String::from("")).into())
+        Err(ErrorKind::VersionError(String::from(""), String::from("")).into())
     }
 }
 
-struct Message {}
+struct Message {
+    data: String,
+    command: CommandType,
+    seqNr: u32,
+}
 
 pub struct MessageParser {
     version: TuyaVersion,
@@ -49,27 +96,24 @@ impl MessageParser {
             cipher,
         })
     }
+}
 
-    // fn parse_packet(buf: Vec<u8>) -> Result()
+fn parse_packets(buf: &[u8]) -> Result<Vec<Message>> {
+    let packets: Vec<Message> = Vec::new();
+    let mut buf = BufReader::new(buf);
+    let mut prefix = [0; 4];
+    buf.read_exact(&mut prefix)
+        .context(ErrorKind::BadPackagePrefix)?;
+
+    Ok(packets)
 }
 
 fn verify_key(key: String) -> Result<String> {
     if key.len() == 16 {
         Ok(key)
     } else {
-        Err(E::KeyLength(key.len()).into())
+        Err(ErrorKind::KeyLength(key.len()).into())
     }
-}
-
-#[derive(Debug, Fail)]
-pub enum E {
-    #[fail(display = "Wrong key lenght {}, should be 16", _0)]
-    KeyLength(usize),
-    #[fail(
-        display = "Could not parse Version string. \'{}.{}\' is not a known TuyaVersion.",
-        _0, _1
-    )]
-    VersionError(String, String),
 }
 
 #[test]
@@ -83,6 +127,9 @@ fn verify_key_lenght_not_16_gives_error() {
     let bad_key = String::from("13579BDF");
     assert!(verify_key(bad_key).is_err());
 }
+
+#[test]
+fn verify_package_prefix() {}
 
 #[test]
 fn verify_parse_mqttversion() {
