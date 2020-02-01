@@ -2,7 +2,7 @@ use crate::mesparse::Result;
 /* Reverse engineered by kueblc */
 
 /* eslint-disable array-element-newline */
-const crc32Table: [u32; 256] = [
+const CRC32TABLE: [u32; 256] = [
     0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA, 0x076DC419, 0x706AF48F, 0xE963A535, 0x9E6495A3,
     0x0EDB8832, 0x79DCB8A4, 0xE0D5E91E, 0x97D2D988, 0x09B64C2B, 0x7EB17CBD, 0xE7B82D07, 0x90BF1D91,
     0x1DB71064, 0x6AB020F2, 0xF3B97148, 0x84BE41DE, 0x1ADAD47D, 0x6DDDE4EB, 0xF4D4B551, 0x83D385C7,
@@ -37,10 +37,22 @@ const crc32Table: [u32; 256] = [
     0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94, 0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D,
 ];
 
-fn crc(bytes: &[u8]) -> Result<u32> {
-    let crc = 0xFFFF_FFFF;
-
-    for ()
+pub fn crc(bytes: &[u8]) -> Result<u32> {
+    let mut crc = 0xFFFF_FFFFu32;
+    for b in bytes {
+        let index: usize = ((crc ^ u32::from(*b)) & 0b1111_1111) as usize;
+        crc = (crc >> 8) ^ CRC32TABLE[index];
+    }
 
     return Ok(crc ^ 0xFFFF_FFFF);
+}
+
+#[test]
+fn test_crc_calculation() {
+    let crcval = crc(b"Hello World").unwrap();
+    assert_eq!(crcval, u32::from_str_radix("4a17b156", 16).unwrap());
+    let crcval = crc(b"ThisIsYuyaCalling").unwrap();
+    assert_eq!(crcval, u32::from_str_radix("d6296f21", 16).unwrap());
+    let crcval = crc(b"{devId: '002004265ccf7fb1b659', dps: {1: true, 2: 0}}").unwrap();
+    assert_eq!(crcval, u32::from_str_radix("a524febe", 16).unwrap());
 }
