@@ -53,6 +53,16 @@ pub enum ErrorKind {
     VersionError(String, String),
     #[fail(display = "bad prefix in package")]
     BadPackagePrefix,
+    #[fail(display = "bad sequence number in package")]
+    BadPackageSeqNr,
+    #[fail(display = "bad command type in package")]
+    BadCommandType,
+    #[fail(display = "bad length in package")]
+    BadPackageLength,
+    #[fail(display = "could not read payload, length should be {}", _0)]
+    BadPayload(usize),
+    #[fail(display = "bad suffix in package")]
+    BadPackageSuffix,
     #[doc(hidden)]
     #[fail(display = "")]
     __Nonexhaustive,
