@@ -50,9 +50,9 @@ pub fn crc(bytes: &[u8]) -> Result<u32> {
 #[test]
 fn test_crc_calculation() {
     let crcval = crc(b"Hello World").unwrap();
-    assert_eq!(crcval, u32::from_str_radix("4a17b156", 16).unwrap());
+    assert_eq!(format!("{:x}", crcval), "4a17b156");
     let crcval = crc(b"ThisIsYuyaCalling").unwrap();
-    assert_eq!(crcval, u32::from_str_radix("d6296f21", 16).unwrap());
+    assert_eq!(format!("{:x}", crcval), "d6296f21");
     let crcval = crc(b"{devId: '002004265ccf7fb1b659', dps: {1: true, 2: 0}}").unwrap();
-    assert_eq!(crcval, u32::from_str_radix("a524febe", 16).unwrap());
+    assert_eq!(format!("{:x}", crcval), "a524febe");
 }
