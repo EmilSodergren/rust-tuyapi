@@ -1,4 +1,3 @@
-use crate::mesparse::Result;
 /* Reverse engineered by kueblc */
 
 /* eslint-disable array-element-newline */
@@ -37,22 +36,22 @@ const CRC32TABLE: [u32; 256] = [
     0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94, 0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D,
 ];
 
-pub fn crc(bytes: &[u8]) -> Result<u32> {
+pub fn crc(bytes: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
     for b in bytes {
         let index = ((crc ^ u32::from(*b)) as u8) as usize;
         crc = (crc >> 8) ^ CRC32TABLE[index];
     }
 
-    return Ok(crc ^ 0xFFFF_FFFF);
+    return crc ^ 0xFFFF_FFFF;
 }
 
 #[test]
 fn test_crc_calculation() {
-    let crcval = crc(b"Hello World").unwrap();
+    let crcval = crc(b"Hello World");
     assert_eq!(format!("{:x}", crcval), "4a17b156");
-    let crcval = crc(b"ThisIsYuyaCalling").unwrap();
+    let crcval = crc(b"ThisIsYuyaCalling");
     assert_eq!(format!("{:x}", crcval), "d6296f21");
-    let crcval = crc(b"{devId: '002004265ccf7fb1b659', dps: {1: true, 2: 0}}").unwrap();
+    let crcval = crc(b"{devId: '002004265ccf7fb1b659', dps: {1: true, 2: 0}}");
     assert_eq!(format!("{:x}", crcval), "a524febe");
 }
