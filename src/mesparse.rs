@@ -1,19 +1,18 @@
 use crate::cipher::TuyaCipher;
 use crate::error::{Error, ErrorKind};
-use failure::ResultExt;
-use log::debug;
-use num::{FromPrimitive, ToPrimitive};
+use hex::FromHex;
+use nom::{
+    bytes::streaming::{tag, take_until},
+    AsBytes, IResult,
+};
 use std::cmp::PartialEq;
-use std::io::{BufReader, Read};
 use std::str::FromStr;
 
 pub type Result<T> = std::result::Result<T, Error>;
-const PREFIX_BYTES: u32 = 0x000055AA;
-const SUFFIX_BYTES: u32 = 0x0000AA55;
 
 /// Human readable definitions of command bytes.
 #[allow(dead_code)]
-#[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, FromPrimitive, ToPrimitive, PartialEq)]
 enum CommandType {
     Udp = 0,
     ApConfig = 1,
@@ -76,6 +75,7 @@ impl FromStr for TuyaVersion {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Message {
     payload: Vec<u8>,
     command: CommandType,
@@ -103,49 +103,17 @@ impl MessageParser {
     }
 }
 
-fn verify_magic_bytes(received: u32, magic_bytes: u32) -> Result<()> {
-    if received == magic_bytes {
-        return Ok(());
-    }
-    debug!("Received: {}, should be {}", received, magic_bytes);
-    Err(ErrorKind::BadPackagePrefix.into())
+pub fn parse_packets(_buf: &[u8]) -> Result<Vec<Message>> {
+    Ok(vec![])
 }
 
-pub fn parse_packets(buf: &[u8]) -> Result<Vec<Message>> {
-    let mut packets: Vec<Message> = Vec::new();
-    let mut buf = BufReader::new(buf);
-    let mut prefix = [0; 4];
-    buf.read_exact(&mut prefix)
-        .context(ErrorKind::BadPackagePrefix)?;
-    verify_magic_bytes(u32::from_be_bytes(prefix), PREFIX_BYTES)?;
-    let mut seq_nr = [0; 4];
-    buf.read_exact(&mut seq_nr)
-        .context(ErrorKind::BadPackageSeqNr)?;
-    let seq_nr = u32::from_be_bytes(seq_nr);
-    let mut command = [0; 4];
-    buf.read_exact(&mut command)
-        .context(ErrorKind::BadCommandType)?;
-    let command =
-        FromPrimitive::from_u32(u32::from_be_bytes(command)).ok_or(ErrorKind::BadCommandType)?;
-    let mut length = [0; 4];
-    buf.read_exact(&mut length)
-        .context(ErrorKind::BadPackageLength)?;
-    let length = u32::from_be_bytes(length);
-    let mut payload = vec![0u8; length as usize];
-    buf.read_exact(&mut payload)
-        .context(ErrorKind::BadPayload(length as usize))?;
-    let mut suffix = [0; 4];
-    buf.read_exact(&mut suffix)
-        .context(ErrorKind::BadPackageSuffix)?;
-    verify_magic_bytes(u32::from_be_bytes(suffix), SUFFIX_BYTES)?;
-    let message = Message {
-        command,
-        seq_nr,
-        payload,
-    };
-    packets.push(message);
-
-    Ok(packets)
+fn parse_tuya(buf: &[u8]) -> IResult<&[u8], &[u8]> {
+    let prefix_bytes = <[u8; 4]>::from_hex("000055AA").expect("");
+    let (buf, _) = tag(prefix_bytes)(buf)?;
+    let suffix_bytes = <[u8; 4]>::from_hex("0000AA55").expect("");
+    let (_buf, data) = take_until(suffix_bytes.as_bytes())(buf)?;
+    println!("{:?}", data);
+    Ok((&[0u8; 4], &[0u8; 4]))
 }
 
 fn verify_key(key: &str) -> Result<()> {
@@ -169,12 +137,6 @@ fn verify_key_lenght_not_16_gives_error() {
 }
 
 #[test]
-fn test_verify_magic_bytes() {
-    assert!(verify_magic_bytes(PREFIX_BYTES, PREFIX_BYTES).is_ok());
-    assert!(verify_magic_bytes(SUFFIX_BYTES, PREFIX_BYTES).is_err());
-}
-
-#[test]
 fn verify_parse_mqttversion() {
     let version = TuyaVersion::from_str("3.1").unwrap();
     assert_eq!(version, TuyaVersion::ThreeOne);
@@ -186,22 +148,13 @@ fn verify_parse_mqttversion() {
 }
 
 #[test]
-fn test_parse_packets() {
-    let mut packet = Vec::new();
-    packet.append(&mut PREFIX_BYTES.to_be_bytes().to_vec()); // Magic bytes
-    packet.append(&mut 4u32.to_be_bytes().to_vec()); // sequence number
-    packet.append(
-        // Command Type
-        &mut ToPrimitive::to_u32(&CommandType::HeartBeat)
-            .unwrap()
-            .to_be_bytes()
-            .to_vec(),
-    );
-    let message = "ThisIsAPayload".as_bytes();
-    packet.append(&mut (message.len() as u32).to_be_bytes().to_vec()); // Payload size
-    packet.append(&mut 0u32.to_be_bytes().to_vec()); // Return Code
-    packet.append(&mut message.to_vec()); // Payload
-    packet.append(&mut 123456u32.to_be_bytes().to_vec());
-    packet.append(&mut SUFFIX_BYTES.to_be_bytes().to_vec());
-    println!("{:?}", packet);
+fn test_parse_tuya() {
+    let packet = hex::decode("000055aa00000000000000090000000c00000000b051ab030000aa55").unwrap();
+    let expected = Message {
+        command: CommandType::HeartBeat,
+        payload: Vec::new(),
+        seq_nr: 0,
+    };
+    parse_tuya(&packet);
+    // assert_eq!(expected, parse_tuya(&packet).unwrap())
 }
