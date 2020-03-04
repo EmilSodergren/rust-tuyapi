@@ -3,6 +3,8 @@ use crate::error::{Error, ErrorKind};
 use hex::FromHex;
 use nom::{
     bytes::streaming::{tag, take_until},
+    multi::many1,
+    sequence::tuple,
     AsBytes, IResult,
 };
 use std::cmp::PartialEq;
@@ -103,17 +105,21 @@ impl MessageParser {
     }
 }
 
-pub fn parse_packets(_buf: &[u8]) -> Result<Vec<Message>> {
+pub fn parse_packet(_buf: &[u8]) -> Result<Vec<Message>> {
     Ok(vec![])
 }
 
-fn parse_tuya(buf: &[u8]) -> IResult<&[u8], &[u8]> {
+/// Function will return a vector with the messages extracted from the bytes received from the
+/// server
+fn extract_messages(buf: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
     let prefix_bytes = <[u8; 4]>::from_hex("000055AA").expect("");
-    let (buf, _) = tag(prefix_bytes)(buf)?;
     let suffix_bytes = <[u8; 4]>::from_hex("0000AA55").expect("");
-    let (_buf, data) = take_until(suffix_bytes.as_bytes())(buf)?;
-    println!("{:?}", data);
-    Ok((&[0u8; 4], &[0u8; 4]))
+    let (buf, data) = many1(tuple((
+        tag(prefix_bytes),
+        take_until(suffix_bytes.as_bytes()),
+    )))(buf)?;
+    let val: Vec<&[u8]> = data.into_iter().map(|(_, val)| val).collect();
+    Ok((buf, val))
 }
 
 fn verify_key(key: &str) -> Result<()> {
@@ -155,6 +161,6 @@ fn test_parse_tuya() {
         payload: Vec::new(),
         seq_nr: 0,
     };
-    parse_tuya(&packet);
+    extract_messages(&packet);
     // assert_eq!(expected, parse_tuya(&packet).unwrap())
 }
