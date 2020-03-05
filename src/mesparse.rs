@@ -114,12 +114,12 @@ pub fn parse_packet(_buf: &[u8]) -> Result<Vec<Message>> {
 fn extract_messages(buf: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
     let prefix_bytes = <[u8; 4]>::from_hex("000055AA").expect("");
     let suffix_bytes = <[u8; 4]>::from_hex("0000AA55").expect("");
-    let (buf, data) = many1(tuple((
+    let (_, data) = many1(tuple((
         tag(prefix_bytes),
         take_until(suffix_bytes.as_bytes()),
     )))(buf)?;
     let val: Vec<&[u8]> = data.into_iter().map(|(_, val)| val).collect();
-    Ok((buf, val))
+    Ok((&[], val))
 }
 
 fn verify_key(key: &str) -> Result<()> {
@@ -131,19 +131,19 @@ fn verify_key(key: &str) -> Result<()> {
 }
 
 #[test]
-fn verify_key_length_is_16() {
+fn test_key_length_is_16() {
     let key = "0123456789ABCDEF";
     assert!(verify_key(key).is_ok());
 }
 
 #[test]
-fn verify_key_lenght_not_16_gives_error() {
+fn test_key_lenght_not_16_gives_error() {
     let bad_key = "13579BDF";
     assert!(verify_key(bad_key).is_err());
 }
 
 #[test]
-fn verify_parse_mqttversion() {
+fn test_parse_mqttversion() {
     let version = TuyaVersion::from_str("3.1").unwrap();
     assert_eq!(version, TuyaVersion::ThreeOne);
 
@@ -154,13 +154,11 @@ fn verify_parse_mqttversion() {
 }
 
 #[test]
-fn test_parse_tuya() {
+fn test_extract_messages() {
     let packet = hex::decode("000055aa00000000000000090000000c00000000b051ab030000aa55").unwrap();
-    let expected = Message {
-        command: CommandType::HeartBeat,
-        payload: Vec::new(),
-        seq_nr: 0,
-    };
-    extract_messages(&packet);
-    // assert_eq!(expected, parse_tuya(&packet).unwrap())
+    let (buf, messages) = extract_messages(&packet).unwrap();
+    assert_eq!(buf.len(), 0);
+    assert_eq!(messages.len(), 1);
+    let expected_message = hex::decode("00000000000000090000000c00000000b051ab03").unwrap();
+    assert_eq!(messages[0], &expected_message[..]);
 }
