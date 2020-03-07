@@ -1,12 +1,18 @@
 use crate::cipher::TuyaCipher;
 use crate::error::{Error, ErrorKind};
+use crate::nom_patch::length_value_tuya;
 use hex::FromHex;
 use nom::{
-    bytes::streaming::{tag, take_until},
+    bytes::complete::{tag, take_until},
+    character::complete::alpha0,
     multi::many1,
+    number::complete::be_u32,
     sequence::tuple,
     AsBytes, IResult,
 };
+
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use std::cmp::PartialEq;
 use std::str::FromStr;
 
@@ -14,7 +20,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Human readable definitions of command bytes.
 #[allow(dead_code)]
-#[derive(Debug, FromPrimitive, ToPrimitive, PartialEq)]
+#[derive(Debug, FromPrimitive, PartialEq)]
 enum CommandType {
     Udp = 0,
     ApConfig = 1,
@@ -48,6 +54,7 @@ enum CommandType {
     LanCheckGwUpdate = 250,
     LanGwUpdate = 251,
     LanSetGwChannel = 252,
+    Error = 255,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -80,7 +87,7 @@ impl FromStr for TuyaVersion {
 #[derive(Debug, PartialEq)]
 pub struct Message {
     payload: Vec<u8>,
-    command: CommandType,
+    command: Option<CommandType>,
     seq_nr: u32,
 }
 
@@ -109,6 +116,24 @@ pub fn parse_packet(_buf: &[u8]) -> Result<Vec<Message>> {
     Ok(vec![])
 }
 
+fn parse_messages(buf: &[u8]) -> IResult<&[u8], Vec<Message>> {
+    let (_, messages) = extract_messages(buf)?;
+    let mut ret: Vec<Message> = vec![];
+    for msg in messages {
+        let (msg, (seq_nr, command_nr, (ret_code, payload, crc))) = tuple((
+            be_u32,
+            be_u32,
+            length_value_tuya(be_u32, tuple((be_u32, alpha0, be_u32))),
+        ))(msg)?;
+        let message = Message {
+            payload: payload.to_vec(),
+            command: FromPrimitive::from_u32(command_nr).or(None),
+            seq_nr: seq_nr,
+        };
+        ret.push(message);
+    }
+    Ok((&[], ret))
+}
 /// Function will return a vector with the messages extracted from the bytes received from the
 /// server
 fn extract_messages(buf: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
@@ -161,4 +186,16 @@ fn test_extract_messages() {
     assert_eq!(messages.len(), 1);
     let expected_message = hex::decode("00000000000000090000000c00000000b051ab03").unwrap();
     assert_eq!(messages[0], &expected_message[..]);
+}
+
+#[test]
+fn test_parse_messages() {
+    let packet = hex::decode("000055aa00000000000000090000000c00000000b051ab030000aa55").unwrap();
+    let expected = Message {
+        command: Some(CommandType::HeartBeat),
+        payload: Vec::new(),
+        seq_nr: 0,
+    };
+    let (buf, messages) = parse_messages(&packet).unwrap();
+    assert_eq!(messages[0], expected);
 }
