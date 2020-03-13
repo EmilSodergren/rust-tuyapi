@@ -1,14 +1,13 @@
 use crate::cipher::TuyaCipher;
-use crate::error::{Error, ErrorKind};
-use crate::nom_patch::length_value_tuya;
+use crate::error::ErrorKind;
 use hex::FromHex;
 use nom::{
-    bytes::complete::{tag, take_until},
-    character::complete::alpha0,
-    multi::many1,
+    bytes::complete::tag,
+    combinator::{map, peek, recognize},
+    multi::{length_data, many1},
     number::complete::be_u32,
     sequence::tuple,
-    AsBytes, IResult,
+    IResult,
 };
 
 use num_derive::FromPrimitive;
@@ -16,7 +15,7 @@ use num_traits::FromPrimitive;
 use std::cmp::PartialEq;
 use std::str::FromStr;
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, ErrorKind>;
 
 /// Human readable definitions of command bytes.
 #[allow(dead_code)]
@@ -64,7 +63,7 @@ pub(crate) enum TuyaVersion {
 }
 
 impl FromStr for TuyaVersion {
-    type Err = Error;
+    type Err = ErrorKind;
 
     fn from_str(s: &str) -> Result<Self> {
         let version: Vec<&str> = s.split(".").collect();
@@ -80,7 +79,7 @@ impl FromStr for TuyaVersion {
                 ErrorKind::VersionError(version[0].to_string(), version[1].to_string()).into(),
             );
         }
-        Err(ErrorKind::VersionError("".to_string(), "".to_string()).into())
+        Err(ErrorKind::VersionError("Unknown".to_string(), "Unknown".to_string()).into())
     }
 }
 
@@ -112,39 +111,39 @@ impl MessageParser {
     }
 }
 
-pub fn parse_packet(_buf: &[u8]) -> Result<Vec<Message>> {
-    Ok(vec![])
-}
-
-fn parse_messages(buf: &[u8]) -> IResult<&[u8], Vec<Message>> {
-    let (_, messages) = extract_messages(buf)?;
-    let mut ret: Vec<Message> = vec![];
-    for msg in messages {
-        let (msg, (seq_nr, command_nr, (ret_code, payload, crc))) = tuple((
-            be_u32,
-            be_u32,
-            length_value_tuya(be_u32, tuple((be_u32, alpha0, be_u32))),
-        ))(msg)?;
-        let message = Message {
-            payload: payload.to_vec(),
-            command: FromPrimitive::from_u32(command_nr).or(None),
-            seq_nr: seq_nr,
-        };
-        ret.push(message);
-    }
-    Ok((&[], ret))
-}
-/// Function will return a vector with the messages extracted from the bytes received from the
-/// server
-fn extract_messages(buf: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
+pub fn parse_messages(buf: &[u8]) -> IResult<&[u8], Vec<Message>> {
     let prefix_bytes = <[u8; 4]>::from_hex("000055AA").expect("");
     let suffix_bytes = <[u8; 4]>::from_hex("0000AA55").expect("");
-    let (_, data) = many1(tuple((
+
+    let be_u32_minus4 = map(be_u32, |n: u32| n - 4);
+    let (buf, vec) = many1(tuple((
         tag(prefix_bytes),
-        take_until(suffix_bytes.as_bytes()),
+        be_u32,
+        be_u32,
+        length_data(be_u32_minus4),
+        tag(suffix_bytes),
     )))(buf)?;
-    let val: Vec<&[u8]> = data.into_iter().map(|(_, val)| val).collect();
-    Ok((&[], val))
+    let mut messages = vec![];
+    for (_, seq_nr, command, recv_data, _) in vec {
+        // check if the recv_data contains a return code
+        let (recv_data, maybe_retcode) = peek(be_u32)(recv_data)?;
+        let (recv_data, _ret_code) = if maybe_retcode & 0xFFFFFF00 == 0 {
+            let (a, b) = recognize(be_u32)(recv_data)?;
+            (a, Some(b))
+        } else {
+            (recv_data, None)
+        };
+        // TODO: Check return code
+        let (payload, _crc) = recv_data.split_at(recv_data.len() - 4);
+        // TODO: Calculate CRC and compare
+        let message = Message {
+            payload: payload.to_vec(),
+            command: FromPrimitive::from_u32(command).or(None),
+            seq_nr: seq_nr,
+        };
+        messages.push(message);
+    }
+    Ok((buf, messages))
 }
 
 fn verify_key(key: &str) -> Result<()> {
@@ -179,16 +178,6 @@ fn test_parse_mqttversion() {
 }
 
 #[test]
-fn test_extract_messages() {
-    let packet = hex::decode("000055aa00000000000000090000000c00000000b051ab030000aa55").unwrap();
-    let (buf, messages) = extract_messages(&packet).unwrap();
-    assert_eq!(buf.len(), 0);
-    assert_eq!(messages.len(), 1);
-    let expected_message = hex::decode("00000000000000090000000c00000000b051ab03").unwrap();
-    assert_eq!(messages[0], &expected_message[..]);
-}
-
-#[test]
 fn test_parse_messages() {
     let packet = hex::decode("000055aa00000000000000090000000c00000000b051ab030000aa55").unwrap();
     let expected = Message {
@@ -198,4 +187,26 @@ fn test_parse_messages() {
     };
     let (buf, messages) = parse_messages(&packet).unwrap();
     assert_eq!(messages[0], expected);
+    assert_eq!(buf, &[])
+}
+
+#[test]
+fn test_parse_double_messages() {
+    let packet = hex::decode("000055aa00000000000000090000000c00000000b051ab030000aa55000055aa000000000000000a0000000c00000000b051ab030000aa55").unwrap();
+    let expected = vec![
+        Message {
+            command: Some(CommandType::HeartBeat),
+            payload: Vec::new(),
+            seq_nr: 0,
+        },
+        Message {
+            command: Some(CommandType::DpQuery),
+            payload: Vec::new(),
+            seq_nr: 0,
+        },
+    ];
+    let (buf, messages) = parse_messages(&packet).unwrap();
+    assert_eq!(messages[0], expected[0]);
+    assert_eq!(messages[1], expected[1]);
+    assert_eq!(buf, &[])
 }
