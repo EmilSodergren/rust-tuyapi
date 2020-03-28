@@ -187,7 +187,7 @@ fn test_parse_messages() {
     };
     let (buf, messages) = parse_messages(&packet).unwrap();
     assert_eq!(messages[0], expected);
-    assert_eq!(buf, &[])
+    assert_eq!(buf, &[] as &[u8]);
 }
 
 #[test]
@@ -208,5 +208,5 @@ fn test_parse_double_messages() {
     let (buf, messages) = parse_messages(&packet).unwrap();
     assert_eq!(messages[0], expected[0]);
     assert_eq!(messages[1], expected[1]);
-    assert_eq!(buf, &[])
+    assert_eq!(buf, &[] as &[u8]);
 }
