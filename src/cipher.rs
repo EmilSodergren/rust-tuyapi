@@ -21,6 +21,8 @@ impl TuyaCipher {
         }?;
         Ok(encode(res).as_bytes().to_vec())
     }
+
+    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>> {}
 }
 
 #[test]
@@ -41,5 +43,21 @@ fn encrypt_message_as_a_buffer() {
         .unwrap();
 
     let expected = b"zrA8OK3r3JMiUXpXDWauNppY4Am2c8rZ6sb4Yf15MjM8n5ByDx+QWeCZtcrPqddxLrhm906bSKbQAFtT1uCp+zP5AxlqJf5d0Pp2OxyXyjg=".to_vec();
+    assert_eq!(expected, result);
+}
+
+#[test]
+fn decrypt_message_with_header_and_base_64_encodeing() {
+    let cipher = TuyaCipher::create("bbe88b3f4106d354".to_string(), TuyaVersion::ThreeOne);
+    let message = b"3.133ed3d4a21effe90zrA8OK3r3JMiUXpXDWauNppY4Am2c8rZ6sb4Yf15MjM8n5ByDx+QWeCZtcrPqddxLrhm906bSKbQAFtT1uCp+zP5AxlqJf5d0Pp2OxyXyjg=i";
+    let expected = json::parse(
+        r#"{"devId": "002004265ccf7fb1b659",
+            "dps": {"1": false, "2": 0},
+            "t": 1529442366,
+            "s": 8}"#,
+    )
+    .unwrap();
+
+    let result = cipher.decrypt(message);
     assert_eq!(expected, result);
 }
