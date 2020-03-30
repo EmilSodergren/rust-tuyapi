@@ -1,21 +1,27 @@
 use crate::error::ErrorKind;
 use crate::mesparse::{Result, TuyaVersion};
 use base64::encode;
-use openssl::symm::{encrypt, Cipher};
+use openssl::symm::{decrypt, encrypt, Cipher};
+
+const UDP_KEY: &str = "yGAdlopoPVldABfn";
 
 pub(crate) struct TuyaCipher {
     key: String,
     version: TuyaVersion,
+    cipher: Cipher,
 }
 
 impl TuyaCipher {
     pub fn create(key: String, version: TuyaVersion) -> TuyaCipher {
-        TuyaCipher { key, version }
+        TuyaCipher {
+            key,
+            version,
+            cipher: Cipher::aes_128_ecb(),
+        }
     }
 
     pub fn encrypt(&self, data: &[u8], is_base64: bool) -> Result<Vec<u8>> {
-        let cipher = Cipher::aes_128_ecb();
-        let res = encrypt(cipher, &self.key.as_bytes(), None, data)
+        let res = encrypt(self.cipher, &self.key.as_bytes(), None, data)
             .map_err(|e| ErrorKind::EncryptionError(e))?;
         if is_base64 {
             Ok(res)
@@ -25,11 +31,21 @@ impl TuyaCipher {
     }
 
     pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let (_, data) = match self.version {
-            TuyaVersion::ThreeOne => data.split_at(19),
-            TuyaVersion::ThreeThree => data.split_at(15),
+        // Different header size in version 3.1 and 3.3
+        // 3.1 is base64 encoded, 3.3 is not
+        let data = match self.version {
+            TuyaVersion::ThreeOne => {
+                let (_, data) = data.split_at(19);
+                base64::decode(data).map_err(|e| ErrorKind::Base64DecodeError(e))?
+            }
+            TuyaVersion::ThreeThree => data.split_at(15).1.to_vec(),
         };
-        Ok(data.to_vec())
+        // let udpkey_hash = md5::compute(UDP_KEY);
+        let res = decrypt(self.cipher, &self.key.as_bytes(), None, &data)
+            // .or(decrypt(self.cipher, udpkey_hash.as_bytes(), None, &data))
+            .map_err(|e| ErrorKind::DecryptionError(e))?;
+
+        Ok(res.to_vec())
     }
 }
 
