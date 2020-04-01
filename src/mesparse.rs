@@ -62,6 +62,15 @@ pub(crate) enum TuyaVersion {
     ThreeThree,
 }
 
+impl TuyaVersion {
+    pub fn as_bytes(&self) -> &[u8] {
+        match &self {
+            TuyaVersion::ThreeOne => "3.1".as_bytes(),
+            TuyaVersion::ThreeThree => "3.3".as_bytes(),
+        }
+    }
+}
+
 impl FromStr for TuyaVersion {
     type Err = ErrorKind;
 
