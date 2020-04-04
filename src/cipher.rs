@@ -3,10 +3,8 @@ use crate::mesparse::{Result, TuyaVersion};
 use base64::encode;
 use openssl::symm::{decrypt, encrypt, Cipher};
 
-const UDP_KEY: &str = "yGAdlopoPVldABfn";
-
 pub(crate) struct TuyaCipher {
-    key: String,
+    key: Vec<u8>,
     version: TuyaVersion,
     cipher: Cipher,
 }
@@ -16,16 +14,16 @@ fn contains_header(version: &TuyaVersion, data: &[u8]) -> bool {
 }
 
 impl TuyaCipher {
-    pub fn create(key: String, version: TuyaVersion) -> TuyaCipher {
+    pub fn create(key: &[u8], version: TuyaVersion) -> TuyaCipher {
         TuyaCipher {
-            key,
+            key: key.to_vec(),
             version,
             cipher: Cipher::aes_128_ecb(),
         }
     }
 
     pub fn encrypt(&self, data: &[u8], is_base64: bool) -> Result<Vec<u8>> {
-        let res = encrypt(self.cipher, &self.key.as_bytes(), None, data)
+        let res = encrypt(self.cipher, &self.key, None, data)
             .map_err(|e| ErrorKind::EncryptionError(e))?;
         if is_base64 {
             Ok(res)
@@ -55,8 +53,7 @@ impl TuyaCipher {
                 TuyaVersion::ThreeThree => data.to_vec(),
             }
         };
-        let res = decrypt(self.cipher, &self.key.as_bytes(), None, &data)
-            .or(decrypt(self.cipher, &md5::compute(UDP_KEY).0, None, &data))
+        let res = decrypt(self.cipher, &self.key, None, &data)
             .map_err(|e| ErrorKind::DecryptionError(e))?;
 
         Ok(res.to_vec())
@@ -65,24 +62,24 @@ impl TuyaCipher {
 
 #[test]
 fn test_contains_header_with_correct_header() {
-    let cipher = TuyaCipher::create("bbe88b3f4106d354".to_string(), TuyaVersion::ThreeOne);
+    let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
     assert_eq!(contains_header(&cipher.version, b"3.133ed3d4a2..."), true)
 }
 
 #[test]
 fn test_contains_header_with_wrong_header() {
-    let cipher = TuyaCipher::create("bbe88b3f4106d354".to_string(), TuyaVersion::ThreeOne);
+    let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
     assert_eq!(contains_header(&cipher.version, b"3.333ed3d4a2..."), false)
 }
 
 #[test]
 fn test_contains_header_with_no_header() {
-    let cipher = TuyaCipher::create("bbe88b3f4106d354".to_string(), TuyaVersion::ThreeOne);
+    let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
     assert_eq!(contains_header(&cipher.version, b"zrA8OK3r3JMi.."), false)
 }
 #[test]
 fn encrypt_message() {
-    let cipher = TuyaCipher::create("bbe88b3f4106d354".to_string(), TuyaVersion::ThreeOne);
+    let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
     let data = r#"{"devId":"002004265ccf7fb1b659","dps":{"1":false,"2":0},"t":1529442366,"s":8}"#
         .as_bytes();
     let base64 = false;
@@ -94,7 +91,7 @@ fn encrypt_message() {
 
 #[test]
 fn decrypt_message_with_header_and_base_64_encoding() {
-    let cipher = TuyaCipher::create("bbe88b3f4106d354".to_string(), TuyaVersion::ThreeOne);
+    let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
     let message = b"3.133ed3d4a21effe90zrA8OK3r3JMiUXpXDWauNppY4Am2c8rZ6sb4Yf15MjM8n5ByDx+QWeCZtcrPqddxLrhm906bSKbQAFtT1uCp+zP5AxlqJf5d0Pp2OxyXyjg=";
     let expected =
         r#"{"devId":"002004265ccf7fb1b659","dps":{"1":false,"2":0},"t":1529442366,"s":8}"#
@@ -107,7 +104,7 @@ fn decrypt_message_with_header_and_base_64_encoding() {
 
 #[test]
 fn decrypt_message_without_header_and_without_base64_encoding() {
-    let cipher = TuyaCipher::create("bbe88b3f4106d354".to_string(), TuyaVersion::ThreeThree);
+    let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeThree);
     let message = hex::decode("CEB03C38ADEBDC9322517A570D66AE369A58E009B673CAD9EAC6F861FD7932333C9F90720F1F9059E099B5CACFA9D7712EB866F74E9B48A6D0005B53D6E0A9FB33F903196A25FE5DD0FA763B1C97CA38").unwrap();
     let expected =
         r#"{"devId":"002004265ccf7fb1b659","dps":{"1":false,"2":0},"t":1529442366,"s":8}"#
@@ -120,7 +117,7 @@ fn decrypt_message_without_header_and_without_base64_encoding() {
 
 #[test]
 fn decrypt_message_without_header_and_base64_encoding() {
-    let cipher = TuyaCipher::create("bbe88b3f4106d354".to_string(), TuyaVersion::ThreeOne);
+    let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
     let message = b"zrA8OK3r3JMiUXpXDWauNppY4Am2c8rZ6sb4Yf15MjM8n5ByDx+QWeCZtcrPqddxLrhm906bSKbQAFtT1uCp+zP5AxlqJf5d0Pp2OxyXyjg=";
     let expected =
         r#"{"devId":"002004265ccf7fb1b659","dps":{"1":false,"2":0},"t":1529442366,"s":8}"#
@@ -133,7 +130,7 @@ fn decrypt_message_without_header_and_base64_encoding() {
 
 #[test]
 fn decrypt_message_where_payload_is_not_json() {
-    let cipher = TuyaCipher::create("bbe88b3f4106d354".to_string(), TuyaVersion::ThreeOne);
+    let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
     let message = b"3.133ed3d4a21effe90rt1hJFzMJPF3x9UhPTCiXw==";
     let expected = "gw id invalid".as_bytes().to_owned();
 

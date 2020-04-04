@@ -17,6 +17,8 @@ use std::str::FromStr;
 
 pub type Result<T> = std::result::Result<T, ErrorKind>;
 
+const UDP_KEY: &str = "yGAdlopoPVldABfn";
+
 /// Human readable definitions of command bytes.
 #[allow(dead_code)]
 #[derive(Debug, FromPrimitive, PartialEq)]
@@ -101,22 +103,15 @@ pub struct Message {
 
 pub struct MessageParser {
     version: TuyaVersion,
-    key: String,
     cipher: TuyaCipher,
 }
 
 impl MessageParser {
-    pub fn create(ver: String, key: String) -> Result<MessageParser> {
-        let version = TuyaVersion::from_str(&ver)?;
-        if !key.is_empty() {
-            verify_key(&key)?;
-        }
-        let cipher = TuyaCipher::create(key.clone(), version.clone());
-        Ok(MessageParser {
-            version,
-            key,
-            cipher,
-        })
+    pub fn create(ver: &str, key: Option<&str>) -> Result<MessageParser> {
+        let version = TuyaVersion::from_str(ver)?;
+        let key = verify_key(key)?;
+        let cipher = TuyaCipher::create(&key, version.clone());
+        Ok(MessageParser { version, cipher })
     }
 }
 
@@ -148,30 +143,38 @@ pub fn parse_messages(buf: &[u8]) -> IResult<&[u8], Vec<Message>> {
         let message = Message {
             payload: payload.to_vec(),
             command: FromPrimitive::from_u32(command).or(None),
-            seq_nr: seq_nr,
+            seq_nr,
         };
         messages.push(message);
     }
     Ok((buf, messages))
 }
 
-fn verify_key(key: &str) -> Result<()> {
-    if key.len() == 16 {
-        Ok(())
-    } else {
-        Err(ErrorKind::KeyLength(key.len()).into())
+fn verify_key(key: Option<&str>) -> Result<Vec<u8>> {
+    match key {
+        Some(key) => {
+            if key.len() == 16 {
+                return Ok(key.as_bytes().to_vec());
+            } else {
+                return Err(ErrorKind::KeyLength(key.len()).into());
+            }
+        }
+        None => {
+            let default_key = md5::compute(UDP_KEY).0;
+            return Ok(default_key.to_vec());
+        }
     }
 }
 
 #[test]
 fn test_key_length_is_16() {
-    let key = "0123456789ABCDEF";
+    let key = Some("0123456789ABCDEF");
     assert!(verify_key(key).is_ok());
 }
 
 #[test]
 fn test_key_lenght_not_16_gives_error() {
-    let bad_key = "13579BDF";
+    let bad_key = Some("13579BDF");
     assert!(verify_key(bad_key).is_err());
 }
 
