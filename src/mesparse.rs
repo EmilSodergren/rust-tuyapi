@@ -222,3 +222,12 @@ fn test_parse_double_messages() {
     assert_eq!(messages[1], expected[1]);
     assert_eq!(buf, &[] as &[u8]);
 }
+
+#[test]
+fn encode_and_decode_message() {
+    let payload = r#"{"devId":"002004265ccf7fb1b659","dps":{"1":false,"2":0}}"#
+        .as_bytes()
+        .to_owned();
+
+    let parser = MessageParser::create("3.1", None).unwrap();
+}
