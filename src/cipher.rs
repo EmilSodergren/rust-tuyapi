@@ -35,7 +35,7 @@ impl TuyaCipher {
         // Different header size in version 3.1 and 3.3
         // 3.1 is base64 encoded, 3.3 is not
         let data = if contains_header(&self.version, &data) {
-            // Handle the header
+            // Handle header
             match self.version {
                 TuyaVersion::ThreeOne => {
                     let (_, data) = data.split_at(19);
@@ -44,7 +44,7 @@ impl TuyaCipher {
                 TuyaVersion::ThreeThree => data.split_at(15).1.to_vec(),
             }
         } else {
-            // Handle No header
+            // Handle no header
             match self.version {
                 TuyaVersion::ThreeOne => {
                     base64::decode(data).map_err(|e| ErrorKind::Base64DecodeError(e))?
