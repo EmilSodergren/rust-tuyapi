@@ -124,9 +124,9 @@ impl MessageParser {
         Ok(MessageParser { version, cipher })
     }
 
-    pub fn encode(&self, mes: &Message, is_base64: bool, encrypt: bool) -> Result<Vec<u8>> {
+    pub fn encode(&self, mes: &Message, encrypt: bool) -> Result<Vec<u8>> {
         if encrypt {
-            self.cipher.encrypt(&mes.payload, is_base64);
+            self.cipher.encrypt(&mes.payload);
         }
         Ok(vec![])
     }
@@ -145,8 +145,8 @@ impl MessageParser {
 }
 
 pub fn parse_messages(buf: &[u8]) -> IResult<&[u8], Vec<Message>> {
-    let prefix_bytes = <[u8; 4]>::from_hex("000055AA").expect("");
-    let suffix_bytes = <[u8; 4]>::from_hex("0000AA55").expect("");
+    let prefix_bytes = <[u8; 4]>::from_hex("000055AA").unwrap();
+    let suffix_bytes = <[u8; 4]>::from_hex("0000AA55").unwrap();
 
     let be_u32_minus4 = map(be_u32, |n: u32| n - 4);
     let (buf, vec) = many1(tuple((
