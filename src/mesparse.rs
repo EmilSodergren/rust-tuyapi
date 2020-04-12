@@ -125,8 +125,7 @@ impl MessageParser {
     }
 
     pub fn encode(&self, mes: &Message, is_base64: bool, encrypt: bool) -> Result<Vec<u8>> {
-        if self.version == TuyaVersion::ThreeThree {
-        } else if encrypt {
+        if encrypt {
             self.cipher.encrypt(&mes.payload, is_base64);
         }
         Ok(vec![])
@@ -138,6 +137,9 @@ impl MessageParser {
             nom::Err::Incomplete(_) => panic!(),
             nom::Err::Failure((_, e)) => ErrorKind::ParseError(e),
         })?;
+        if !buf.is_empty() {
+            return Err(ErrorKind::BufferNotCompletelyParsedError);
+        }
         Ok(messages)
     }
 }

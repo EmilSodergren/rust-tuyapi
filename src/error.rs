@@ -10,6 +10,7 @@ pub enum ErrorKind {
     EncryptionError(ErrorStack),
     Base64DecodeError(DecodeError),
     DecryptionError(ErrorStack),
+    BufferNotCompletelyParsedError,
     ParseError(nom::error::ErrorKind),
 }
 
@@ -24,6 +25,7 @@ impl fmt::Display for ErrorKind {
                 format!("String failed to decode as base64, error was: {}", err)
             }
             DecryptionError(err) => format!("Decryption failed with: {}", err),
+            BufferNotCompletelyParsedError => format!("Something went wrong when parsing the received buffer. It still contains data after parsing is done."),
             ParseError(err) => format!("Parsing failed with {}", err.description()),
         };
         write!(f, "{}", msg)
