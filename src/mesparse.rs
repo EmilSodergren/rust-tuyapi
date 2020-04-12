@@ -22,7 +22,7 @@ const UDP_KEY: &str = "yGAdlopoPVldABfn";
 /// Human readable definitions of command bytes.
 #[allow(dead_code)]
 #[derive(Debug, FromPrimitive, PartialEq)]
-enum CommandType {
+pub enum CommandType {
     Udp = 0,
     ApConfig = 1,
     Active = 2,
@@ -101,6 +101,16 @@ pub struct Message {
     seq_nr: u32,
 }
 
+impl Message {
+    pub fn new(payload: &[u8], command: Option<CommandType>, seq_nr: u32) -> Message {
+        Message {
+            payload: payload.to_vec(),
+            command,
+            seq_nr,
+        }
+    }
+}
+
 pub struct MessageParser {
     version: TuyaVersion,
     cipher: TuyaCipher,
@@ -112,6 +122,23 @@ impl MessageParser {
         let key = verify_key(key)?;
         let cipher = TuyaCipher::create(&key, version.clone());
         Ok(MessageParser { version, cipher })
+    }
+
+    pub fn encode(&self, mes: &Message, is_base64: bool, encrypt: bool) -> Result<Vec<u8>> {
+        if self.version == TuyaVersion::ThreeThree {
+        } else if encrypt {
+            self.cipher.encrypt(&mes.payload, is_base64);
+        }
+        Ok(vec![])
+    }
+
+    pub fn parse(&self, buf: &[u8]) -> Result<Vec<Message>> {
+        let (buf, messages) = parse_messages(buf).map_err(|err| match err {
+            nom::Err::Error((_, e)) => ErrorKind::ParseError(e),
+            nom::Err::Incomplete(_) => panic!(),
+            nom::Err::Failure((_, e)) => ErrorKind::ParseError(e),
+        })?;
+        Ok(messages)
     }
 }
 
@@ -166,68 +193,64 @@ fn verify_key(key: Option<&str>) -> Result<Vec<u8>> {
     }
 }
 
-#[test]
-fn test_key_length_is_16() {
-    let key = Some("0123456789ABCDEF");
-    assert!(verify_key(key).is_ok());
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_key_length_is_16() {
+        let key = Some("0123456789ABCDEF");
+        assert!(verify_key(key).is_ok());
+    }
 
-#[test]
-fn test_key_lenght_not_16_gives_error() {
-    let bad_key = Some("13579BDF");
-    assert!(verify_key(bad_key).is_err());
-}
+    #[test]
+    fn test_key_lenght_not_16_gives_error() {
+        let bad_key = Some("13579BDF");
+        assert!(verify_key(bad_key).is_err());
+    }
 
-#[test]
-fn test_parse_mqttversion() {
-    let version = TuyaVersion::from_str("3.1").unwrap();
-    assert_eq!(version, TuyaVersion::ThreeOne);
+    #[test]
+    fn test_parse_mqttversion() {
+        let version = TuyaVersion::from_str("3.1").unwrap();
+        assert_eq!(version, TuyaVersion::ThreeOne);
 
-    let version2 = TuyaVersion::from_str("3.3").unwrap();
-    assert_eq!(version2, TuyaVersion::ThreeThree);
+        let version2 = TuyaVersion::from_str("3.3").unwrap();
+        assert_eq!(version2, TuyaVersion::ThreeThree);
 
-    assert!(TuyaVersion::from_str("3.4").is_err());
-}
+        assert!(TuyaVersion::from_str("3.4").is_err());
+    }
 
-#[test]
-fn test_parse_messages() {
-    let packet = hex::decode("000055aa00000000000000090000000c00000000b051ab030000aa55").unwrap();
-    let expected = Message {
-        command: Some(CommandType::HeartBeat),
-        payload: Vec::new(),
-        seq_nr: 0,
-    };
-    let (buf, messages) = parse_messages(&packet).unwrap();
-    assert_eq!(messages[0], expected);
-    assert_eq!(buf, &[] as &[u8]);
-}
-
-#[test]
-fn test_parse_double_messages() {
-    let packet = hex::decode("000055aa00000000000000090000000c00000000b051ab030000aa55000055aa000000000000000a0000000c00000000b051ab030000aa55").unwrap();
-    let expected = vec![
-        Message {
+    #[test]
+    fn test_parse_messages() {
+        let packet =
+            hex::decode("000055aa00000000000000090000000c00000000b051ab030000aa55").unwrap();
+        let expected = Message {
             command: Some(CommandType::HeartBeat),
             payload: Vec::new(),
             seq_nr: 0,
-        },
-        Message {
-            command: Some(CommandType::DpQuery),
-            payload: Vec::new(),
-            seq_nr: 0,
-        },
-    ];
-    let (buf, messages) = parse_messages(&packet).unwrap();
-    assert_eq!(messages[0], expected[0]);
-    assert_eq!(messages[1], expected[1]);
-    assert_eq!(buf, &[] as &[u8]);
-}
+        };
+        let (buf, messages) = parse_messages(&packet).unwrap();
+        assert_eq!(messages[0], expected);
+        assert_eq!(buf, &[] as &[u8]);
+    }
 
-#[test]
-fn encode_and_decode_message() {
-    let payload = r#"{"devId":"002004265ccf7fb1b659","dps":{"1":false,"2":0}}"#
-        .as_bytes()
-        .to_owned();
-
-    let parser = MessageParser::create("3.1", None).unwrap();
+    #[test]
+    fn test_parse_double_messages() {
+        let packet = hex::decode("000055aa00000000000000090000000c00000000b051ab030000aa55000055aa000000000000000a0000000c00000000b051ab030000aa55").unwrap();
+        let expected = vec![
+            Message {
+                command: Some(CommandType::HeartBeat),
+                payload: Vec::new(),
+                seq_nr: 0,
+            },
+            Message {
+                command: Some(CommandType::DpQuery),
+                payload: Vec::new(),
+                seq_nr: 0,
+            },
+        ];
+        let (buf, messages) = parse_messages(&packet).unwrap();
+        assert_eq!(messages[0], expected[0]);
+        assert_eq!(messages[1], expected[1]);
+        assert_eq!(buf, &[] as &[u8]);
+    }
 }
