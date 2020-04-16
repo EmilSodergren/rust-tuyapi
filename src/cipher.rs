@@ -79,8 +79,21 @@ mod tests {
         let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
         assert_eq!(contains_header(&cipher.version, b"zrA8OK3r3JMi.."), false)
     }
+
     #[test]
     fn encrypt_message() {
+        let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
+        let data =
+            r#"{"devId":"002004265ccf7fb1b659","dps":{"1":false,"2":0},"t":1529442366,"s":8}"#
+                .as_bytes();
+        let result = cipher.encrypt(data).unwrap();
+
+        let expected = b"zrA8OK3r3JMiUXpXDWauNppY4Am2c8rZ6sb4Yf15MjM8n5ByDx+QWeCZtcrPqddxLrhm906bSKbQAFtT1uCp+zP5AxlqJf5d0Pp2OxyXyjg=".to_vec();
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn encrypt_message_without_base64_encoding() {
         let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
         let data =
             r#"{"devId":"002004265ccf7fb1b659","dps":{"1":false,"2":0},"t":1529442366,"s":8}"#
@@ -105,7 +118,21 @@ mod tests {
     }
 
     #[test]
-    fn decrypt_message_without_header_and_without_base64_encoding() {
+    fn decrypt_message_without_header_and_without_base64_encoding_version_threeone() {
+        let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
+        let message = b"zrA8OK3r3JMiUXpXDWauNppY4Am2c8rZ6sb4Yf15MjM8n5ByDx+QWeCZtcrPqddxLrhm906bSKbQAFtT1uCp+zP5AxlqJf5d0Pp2OxyXyjg=".to_vec();
+        let message = base64::decode(&message).unwrap();
+        let expected =
+            r#"{"devId":"002004265ccf7fb1b659","dps":{"1":false,"2":0},"t":1529442366,"s":8}"#
+                .as_bytes()
+                .to_owned();
+
+        let decrypted = cipher.decrypt(&message).unwrap();
+        assert_eq!(&expected, &decrypted);
+    }
+
+    #[test]
+    fn decrypt_message_without_header_and_without_base64_encoding_version_threethree() {
         let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeThree);
         let message = hex::decode("CEB03C38ADEBDC9322517A570D66AE369A58E009B673CAD9EAC6F861FD7932333C9F90720F1F9059E099B5CACFA9D7712EB866F74E9B48A6D0005B53D6E0A9FB33F903196A25FE5DD0FA763B1C97CA38").unwrap();
         let expected =
