@@ -9,8 +9,15 @@ pub(crate) struct TuyaCipher {
     cipher: Cipher,
 }
 
-fn contains_header(version: &TuyaVersion, data: &[u8]) -> bool {
-    data.len() > 3 && &data[..3] == version.as_bytes()
+fn maybe_strip_header(version: &TuyaVersion, data: &[u8]) -> Vec<u8> {
+    if data.len() > 3 && &data[..3] == version.as_bytes() {
+        match version {
+            TuyaVersion::ThreeOne => data.split_at(19).1.to_vec(),
+            TuyaVersion::ThreeThree => data.split_at(15).1.to_vec(),
+        }
+    } else {
+        data.to_vec()
+    }
 }
 
 impl TuyaCipher {
@@ -34,31 +41,16 @@ impl TuyaCipher {
     pub fn decrypt(&self, data: &[u8], is_base64: bool) -> Result<Vec<u8>> {
         // Different header size in version 3.1 and 3.3
         // 3.1 is base64 encoded, 3.3 is not
-        let data = if contains_header(&self.version, &data) {
-            // Handle header
-            match self.version {
-                TuyaVersion::ThreeOne => {
-                    let (_, data) = data.split_at(19);
-                    if is_base64 {
-                        base64::decode(data).map_err(|e| ErrorKind::Base64DecodeError(e))?
-                    } else {
-                        data.to_vec()
-                    }
+        let data = maybe_strip_header(&self.version, &data);
+        let data = match self.version {
+            TuyaVersion::ThreeOne => {
+                if is_base64 {
+                    base64::decode(&data).map_err(|e| ErrorKind::Base64DecodeError(e))?
+                } else {
+                    data.to_vec()
                 }
-                TuyaVersion::ThreeThree => data.split_at(15).1.to_vec(),
             }
-        } else {
-            // Handle no header
-            match self.version {
-                TuyaVersion::ThreeOne => {
-                    if is_base64 {
-                        base64::decode(data).map_err(|e| ErrorKind::Base64DecodeError(e))?
-                    } else {
-                        data.to_vec()
-                    }
-                }
-                TuyaVersion::ThreeThree => data.to_vec(),
-            }
+            TuyaVersion::ThreeThree => data.to_vec(),
         };
         let res = decrypt(self.cipher, &self.key, None, &data)
             .map_err(|e| ErrorKind::DecryptionError(e))?;
@@ -71,21 +63,18 @@ impl TuyaCipher {
 mod tests {
     use super::*;
     #[test]
-    fn test_contains_header_with_correct_header() {
+    fn maybe_strip_header_with_correct_header() {
         let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
-        assert_eq!(contains_header(&cipher.version, b"3.133ed3d4a2..."), true)
+        let message = b"3.133ed3d4a21effe90zrA8OK3r3JMiUXpXDWauNppY4Am2c8rZ6sb4Yf15MjM8n5ByDx+QWeCZtcrPqddxLrhm906bSKbQAFtT1uCp+zP5AxlqJf5d0Pp2OxyXyjg=";
+        let expected = b"zrA8OK3r3JMiUXpXDWauNppY4Am2c8rZ6sb4Yf15MjM8n5ByDx+QWeCZtcrPqddxLrhm906bSKbQAFtT1uCp+zP5AxlqJf5d0Pp2OxyXyjg=".to_vec();
+        assert_eq!(maybe_strip_header(&cipher.version, message), expected)
     }
 
     #[test]
-    fn test_contains_header_with_wrong_header() {
+    fn maybe_strip_header_without_header() {
         let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
-        assert_eq!(contains_header(&cipher.version, b"3.333ed3d4a2..."), false)
-    }
-
-    #[test]
-    fn test_contains_header_with_no_header() {
-        let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeOne);
-        assert_eq!(contains_header(&cipher.version, b"zrA8OK3r3JMi.."), false)
+        let message = b"zrA8OK3r3JMiUXpXDWauNppY4Am2c8rZ6sb4Yf15MjM8n5ByDx+QWeCZtcrPqddxLrhm906bSKbQAFtT1uCp+zP5AxlqJf5d0Pp2OxyXyjg=".to_vec();
+        assert_eq!(maybe_strip_header(&cipher.version, &message), message)
     }
 
     #[test]
