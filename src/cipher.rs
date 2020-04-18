@@ -31,7 +31,7 @@ impl TuyaCipher {
         }
     }
 
-    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
+    pub fn decrypt(&self, data: &[u8], is_base64: bool) -> Result<Vec<u8>> {
         // Different header size in version 3.1 and 3.3
         // 3.1 is base64 encoded, 3.3 is not
         let data = if contains_header(&self.version, &data) {
@@ -39,7 +39,11 @@ impl TuyaCipher {
             match self.version {
                 TuyaVersion::ThreeOne => {
                     let (_, data) = data.split_at(19);
-                    base64::decode(data).map_err(|e| ErrorKind::Base64DecodeError(e))?
+                    if is_base64 {
+                        base64::decode(data).map_err(|e| ErrorKind::Base64DecodeError(e))?
+                    } else {
+                        data.to_vec()
+                    }
                 }
                 TuyaVersion::ThreeThree => data.split_at(15).1.to_vec(),
             }
@@ -47,7 +51,11 @@ impl TuyaCipher {
             // Handle no header
             match self.version {
                 TuyaVersion::ThreeOne => {
-                    base64::decode(data).map_err(|e| ErrorKind::Base64DecodeError(e))?
+                    if is_base64 {
+                        base64::decode(data).map_err(|e| ErrorKind::Base64DecodeError(e))?
+                    } else {
+                        data.to_vec()
+                    }
                 }
                 TuyaVersion::ThreeThree => data.to_vec(),
             }
@@ -113,7 +121,7 @@ mod tests {
                 .as_bytes()
                 .to_owned();
 
-        let decrypted = cipher.decrypt(message).unwrap();
+        let decrypted = cipher.decrypt(message, true).unwrap();
         assert_eq!(&expected, &decrypted);
     }
 
@@ -127,20 +135,25 @@ mod tests {
                 .as_bytes()
                 .to_owned();
 
-        let decrypted = cipher.decrypt(&message).unwrap();
+        let decrypted = cipher.decrypt(&message, false).unwrap();
         assert_eq!(&expected, &decrypted);
     }
 
     #[test]
     fn decrypt_message_without_header_and_without_base64_encoding_version_threethree() {
         let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeThree);
-        let message = hex::decode("CEB03C38ADEBDC9322517A570D66AE369A58E009B673CAD9EAC6F861FD7932333C9F90720F1F9059E099B5CACFA9D7712EB866F74E9B48A6D0005B53D6E0A9FB33F903196A25FE5DD0FA763B1C97CA38").unwrap();
+        let message = b"zrA8OK3r3JMiUXpXDWauNppY4Am2c8rZ6sb4Yf15MjM8n5ByDx+QWeCZtcrPqddxLrhm906bSKbQAFtT1uCp+zP5AxlqJf5d0Pp2OxyXyjg=".to_vec();
+        let message = base64::decode(&message).unwrap();
         let expected =
             r#"{"devId":"002004265ccf7fb1b659","dps":{"1":false,"2":0},"t":1529442366,"s":8}"#
                 .as_bytes()
                 .to_owned();
 
-        let decrypted = cipher.decrypt(&message).unwrap();
+        let decrypted = cipher.decrypt(&message, false).unwrap();
+        assert_eq!(&expected, &decrypted);
+        // In the case of ThreeThree version,  the boolean it does not matter. It is always NOT
+        // base64 encoded.
+        let decrypted = cipher.decrypt(&message, true).unwrap();
         assert_eq!(&expected, &decrypted);
     }
 
@@ -153,7 +166,7 @@ mod tests {
                 .as_bytes()
                 .to_owned();
 
-        let decrypted = cipher.decrypt(message).unwrap();
+        let decrypted = cipher.decrypt(message, true).unwrap();
         assert_eq!(&expected, &decrypted);
     }
 
@@ -163,7 +176,7 @@ mod tests {
         let message = b"3.133ed3d4a21effe90rt1hJFzMJPF3x9UhPTCiXw==";
         let expected = "gw id invalid".as_bytes().to_owned();
 
-        let decrypted = cipher.decrypt(message).unwrap();
+        let decrypted = cipher.decrypt(message, true).unwrap();
         assert_eq!(&expected, &decrypted);
     }
 }
