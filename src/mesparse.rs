@@ -139,10 +139,13 @@ impl MessageParser {
         }
         let command = mes.command.clone().ok_or(ErrorKind::CommandTypeMissing)?;
         encoded.extend([0, 0, 0, command.to_u8().unwrap()].iter());
-        encoded.extend((mes.payload.len() as u32 + 8_u32).to_be_bytes().iter());
-        // let payload = self.cipher.encrypt(&mes.payload)?;
+        let payload = match self.version {
+            TuyaVersion::ThreeOne => mes.payload.clone(),
+            TuyaVersion::ThreeThree => self.cipher.encrypt(&mes.payload)?,
+        };
+        encoded.extend((payload.len() as u32 + 8_u32).to_be_bytes().iter());
         // let md5 = self.cipher.md5(&payload);
-        encoded.extend(&mes.payload);
+        encoded.extend(payload);
         encoded.extend(crc(&encoded).to_be_bytes().iter());
         encoded.extend_from_slice(&*SUFFIX_BYTES);
 
@@ -150,7 +153,7 @@ impl MessageParser {
     }
 
     pub fn parse(&self, buf: &[u8]) -> Result<Vec<Message>> {
-        let (buf, messages) = parse_messages(buf).map_err(|err| match err {
+        let (buf, messages) = self.parse_messages(buf).map_err(|err| match err {
             nom::Err::Error((_, e)) => ErrorKind::ParseError(e),
             nom::Err::Incomplete(_) => panic!(),
             nom::Err::Failure((_, e)) => ErrorKind::ParseError(e),
@@ -160,38 +163,45 @@ impl MessageParser {
         }
         Ok(messages)
     }
-}
 
-pub fn parse_messages(buf: &[u8]) -> IResult<&[u8], Vec<Message>> {
-    let be_u32_minus4 = map(be_u32, |n: u32| n - 4);
-    let (buf, vec) = many1(tuple((
-        tag(*PREFIX_BYTES),
-        be_u32,
-        be_u32,
-        length_data(be_u32_minus4),
-        tag(*SUFFIX_BYTES),
-    )))(buf)?;
-    let mut messages = vec![];
-    for (_, seq_nr, command, recv_data, _) in vec {
-        // check if the recv_data contains a return code
-        let (recv_data, maybe_retcode) = peek(be_u32)(recv_data)?;
-        let (recv_data, _ret_code) = if maybe_retcode & 0xFFFFFF00 == 0 {
-            let (a, b) = recognize(be_u32)(recv_data)?;
-            (a, Some(b))
-        } else {
-            (recv_data, None)
-        };
-        // TODO: Check return code
-        let (payload, _crc) = recv_data.split_at(recv_data.len() - 4);
-        // TODO: Calculate CRC and compare
-        let message = Message {
-            payload: payload.to_vec(),
-            command: FromPrimitive::from_u32(command).or(None),
-            seq_nr: Some(seq_nr),
-        };
-        messages.push(message);
+    fn parse_messages<'a>(&self, buf: &'a [u8]) -> IResult<&'a [u8], Vec<Message>> {
+        let be_u32_minus4 = map(be_u32, |n: u32| n - 4);
+        let (buf, vec) = many1(tuple((
+            tag(*PREFIX_BYTES),
+            be_u32,
+            be_u32,
+            length_data(be_u32_minus4),
+            tag(*SUFFIX_BYTES),
+        )))(buf)?;
+        let mut messages = vec![];
+        for (_, seq_nr, command, recv_data, _) in vec {
+            // check if the recv_data contains a return code
+            let (recv_data, maybe_retcode) = peek(be_u32)(recv_data)?;
+            let (recv_data, _ret_code) = if maybe_retcode & 0xFFFFFF00 == 0 {
+                let (a, b) = recognize(be_u32)(recv_data)?;
+                (a, Some(b))
+            } else {
+                (recv_data, None)
+            };
+            // TODO: Check return code
+            let (payload, _crc) = recv_data.split_at(recv_data.len() - 4);
+            // TODO: Calculate CRC and compare
+            let payload = self.try_decrypt(payload);
+            let message = Message {
+                payload,
+                command: FromPrimitive::from_u32(command).or(None),
+                seq_nr: Some(seq_nr),
+            };
+            messages.push(message);
+        }
+        Ok((buf, messages))
     }
-    Ok((buf, messages))
+    fn try_decrypt<'a>(&self, payload: &'a [u8]) -> Vec<u8> {
+        match self.cipher.decrypt(payload) {
+            Ok(decrypted) => decrypted,
+            Err(_) => payload.to_vec(),
+        }
+    }
 }
 
 fn verify_key(key: Option<&str>) -> Result<Vec<u8>> {
@@ -245,7 +255,8 @@ mod tests {
             payload: Vec::new(),
             seq_nr: Some(0),
         };
-        let (buf, messages) = parse_messages(&packet).unwrap();
+        let mp = MessageParser::create("3.1", None).unwrap();
+        let (buf, messages) = mp.parse_messages(&packet).unwrap();
         assert_eq!(messages[0], expected);
         assert_eq!(buf, &[] as &[u8]);
     }
@@ -265,7 +276,8 @@ mod tests {
                 seq_nr: Some(0),
             },
         ];
-        let (buf, messages) = parse_messages(&packet).unwrap();
+        let mp = MessageParser::create("3.1", None).unwrap();
+        let (buf, messages) = mp.parse_messages(&packet).unwrap();
         assert_eq!(messages[0], expected[0]);
         assert_eq!(messages[1], expected[1]);
         assert_eq!(buf, &[] as &[u8]);
