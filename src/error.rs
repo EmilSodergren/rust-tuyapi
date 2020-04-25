@@ -5,6 +5,8 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum ErrorKind {
+    CommandTypeMissing,
+    CanNotEncodeMessageWithoutCommand,
     KeyLength(usize),
     VersionError(String, String),
     EncryptionError(ErrorStack),
@@ -18,6 +20,8 @@ impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use ErrorKind::*;
         let msg = match &self {
+            CommandTypeMissing=> format!("No CommandType was supplied in message"),
+            CanNotEncodeMessageWithoutCommand => format!("Can not encode messages that are missing CommandType"),
             KeyLength(s) => format!("The key length is {}, should be 16", s),
             VersionError(maj, min) => format!("The given version {}.{} is not valid", maj, min),
             EncryptionError(err) => format!("Encryption failed with: {}", err),

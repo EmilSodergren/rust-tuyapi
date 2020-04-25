@@ -7,7 +7,7 @@ fn encode_and_decode_message() {
         .to_owned();
 
     let parser = MessageParser::create("3.1", None).unwrap();
-    let message_to_encode = Message::new(&payload, Some(CommandType::DpQuery), 2);
+    let message_to_encode = Message::new(&payload, CommandType::DpQuery, Some(2));
     let encoded = parser.encode(&message_to_encode, false).unwrap();
 
     let decoded = parser.parse(&encoded).unwrap();

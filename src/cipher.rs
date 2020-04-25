@@ -1,6 +1,5 @@
 use crate::error::ErrorKind;
 use crate::mesparse::{Result, TuyaVersion};
-use base64::encode;
 use openssl::symm::{decrypt, encrypt, Cipher};
 
 pub(crate) struct TuyaCipher {
@@ -33,7 +32,7 @@ impl TuyaCipher {
         let res = encrypt(self.cipher, &self.key, None, data)
             .map_err(|e| ErrorKind::EncryptionError(e))?;
         match self.version {
-            TuyaVersion::ThreeOne => Ok(encode(res).as_bytes().to_vec()),
+            TuyaVersion::ThreeOne => Ok(base64::encode(res).as_bytes().to_vec()),
             TuyaVersion::ThreeThree => Ok(res),
         }
     }
@@ -56,6 +55,23 @@ impl TuyaCipher {
             .map_err(|e| ErrorKind::DecryptionError(e))?;
 
         Ok(res.to_vec())
+    }
+
+    pub fn md5(&self, data: &[u8]) -> Vec<u8> {
+        let hash_line: Vec<u8> = [
+            b"data=",
+            data,
+            b"||lpv=",
+            self.version.as_bytes(),
+            b"||",
+            self.key.as_ref(),
+        ]
+        .iter()
+        .flat_map(|bytes| bytes.iter())
+        .map(|v| *v)
+        .collect();
+        let digest: [u8; 16] = md5::compute(hash_line).into();
+        digest[4..16].to_vec()
     }
 }
 

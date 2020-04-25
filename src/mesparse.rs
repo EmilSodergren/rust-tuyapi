@@ -1,4 +1,5 @@
 use crate::cipher::TuyaCipher;
+use crate::crc::crc;
 use crate::error::ErrorKind;
 use hex::FromHex;
 use nom::{
@@ -10,8 +11,8 @@ use nom::{
     IResult,
 };
 
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, ToPrimitive};
 use std::cmp::PartialEq;
 use std::str::FromStr;
 
@@ -19,9 +20,14 @@ pub type Result<T> = std::result::Result<T, ErrorKind>;
 
 const UDP_KEY: &str = "yGAdlopoPVldABfn";
 
+lazy_static! {
+    static ref PREFIX_BYTES: [u8; 4] = <[u8; 4]>::from_hex("000055AA").unwrap();
+    static ref SUFFIX_BYTES: [u8; 4] = <[u8; 4]>::from_hex("0000AA55").unwrap();
+}
+
 /// Human readable definitions of command bytes.
 #[allow(dead_code)]
-#[derive(Debug, FromPrimitive, PartialEq)]
+#[derive(Debug, FromPrimitive, ToPrimitive, Clone, PartialEq)]
 pub enum CommandType {
     Udp = 0,
     ApConfig = 1,
@@ -98,14 +104,14 @@ impl FromStr for TuyaVersion {
 pub struct Message {
     payload: Vec<u8>,
     command: Option<CommandType>,
-    seq_nr: u32,
+    seq_nr: Option<u32>,
 }
 
 impl Message {
-    pub fn new(payload: &[u8], command: Option<CommandType>, seq_nr: u32) -> Message {
+    pub fn new(payload: &[u8], command: CommandType, seq_nr: Option<u32>) -> Message {
         Message {
             payload: payload.to_vec(),
-            command,
+            command: Some(command),
             seq_nr,
         }
     }
@@ -125,10 +131,22 @@ impl MessageParser {
     }
 
     pub fn encode(&self, mes: &Message, encrypt: bool) -> Result<Vec<u8>> {
-        if encrypt {
-            self.cipher.encrypt(&mes.payload);
+        let mut encoded: Vec<u8> = vec![];
+        encoded.extend_from_slice(&*PREFIX_BYTES);
+        match mes.seq_nr {
+            Some(nr) => encoded.extend(&nr.to_be_bytes()),
+            None => encoded.extend(&0_u32.to_be_bytes()),
         }
-        Ok(vec![])
+        let command = mes.command.clone().ok_or(ErrorKind::CommandTypeMissing)?;
+        encoded.extend([0, 0, 0, command.to_u8().unwrap()].iter());
+        encoded.extend((mes.payload.len() as u32 + 8_u32).to_be_bytes().iter());
+        // let payload = self.cipher.encrypt(&mes.payload)?;
+        // let md5 = self.cipher.md5(&payload);
+        encoded.extend(&mes.payload);
+        encoded.extend(crc(&encoded).to_be_bytes().iter());
+        encoded.extend_from_slice(&*SUFFIX_BYTES);
+
+        Ok(encoded)
     }
 
     pub fn parse(&self, buf: &[u8]) -> Result<Vec<Message>> {
@@ -145,16 +163,13 @@ impl MessageParser {
 }
 
 pub fn parse_messages(buf: &[u8]) -> IResult<&[u8], Vec<Message>> {
-    let prefix_bytes = <[u8; 4]>::from_hex("000055AA").unwrap();
-    let suffix_bytes = <[u8; 4]>::from_hex("0000AA55").unwrap();
-
     let be_u32_minus4 = map(be_u32, |n: u32| n - 4);
     let (buf, vec) = many1(tuple((
-        tag(prefix_bytes),
+        tag(*PREFIX_BYTES),
         be_u32,
         be_u32,
         length_data(be_u32_minus4),
-        tag(suffix_bytes),
+        tag(*SUFFIX_BYTES),
     )))(buf)?;
     let mut messages = vec![];
     for (_, seq_nr, command, recv_data, _) in vec {
@@ -172,7 +187,7 @@ pub fn parse_messages(buf: &[u8]) -> IResult<&[u8], Vec<Message>> {
         let message = Message {
             payload: payload.to_vec(),
             command: FromPrimitive::from_u32(command).or(None),
-            seq_nr,
+            seq_nr: Some(seq_nr),
         };
         messages.push(message);
     }
@@ -228,7 +243,7 @@ mod tests {
         let expected = Message {
             command: Some(CommandType::HeartBeat),
             payload: Vec::new(),
-            seq_nr: 0,
+            seq_nr: Some(0),
         };
         let (buf, messages) = parse_messages(&packet).unwrap();
         assert_eq!(messages[0], expected);
@@ -242,12 +257,12 @@ mod tests {
             Message {
                 command: Some(CommandType::HeartBeat),
                 payload: Vec::new(),
-                seq_nr: 0,
+                seq_nr: Some(0),
             },
             Message {
                 command: Some(CommandType::DpQuery),
                 payload: Vec::new(),
-                seq_nr: 0,
+                seq_nr: Some(0),
             },
         ];
         let (buf, messages) = parse_messages(&packet).unwrap();
