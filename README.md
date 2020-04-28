@@ -1,5 +1,6 @@
 # rust-tuyapi
 [![Build Status](https://travis-ci.com/EmilSodergren/rust-tuyapi.svg?branch=master)](https://travis-ci.com/EmilSodergren/rust-tuyapi)
+
 Rust implementation of the Tuya API used to communicate with Tuya/Smart Life devices.
 
 ## Acknowledgment
