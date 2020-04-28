@@ -5,7 +5,9 @@ rust:
     - nighty
 os:
     - linux
-    - windows
+arch:
+    - amd64
+    - arm64
 jobs:
     allow_failures:
         - rust: nightly
