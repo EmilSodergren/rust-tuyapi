@@ -3,3 +3,10 @@ rust:
     - stable
     - beta
     - nighty
+os:
+    - linux
+    - windows
+jobs:
+    allow_failures:
+        - rust: nightly
+    fast_finish: true
