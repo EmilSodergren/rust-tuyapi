@@ -2,7 +2,7 @@ language: rust
 rust:
     - stable
     - beta
-    - nighty
+    - nightly
 os:
     - linux
 arch:
