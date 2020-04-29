@@ -146,9 +146,7 @@ impl MessageParser {
                     self.cipher.encrypt(&mes.payload)?
                 } else {
                     let mut payload_with_header = Vec::new();
-                    payload_with_header.insert(0, '3' as u8);
-                    payload_with_header.insert(1, '.' as u8);
-                    payload_with_header.insert(2, '3' as u8);
+                    payload_with_header.extend(self.version.as_bytes());
                     payload_with_header.extend(vec![0; 12]);
                     payload_with_header.extend(self.cipher.encrypt(&mes.payload)?);
                     payload_with_header
@@ -167,7 +165,7 @@ impl MessageParser {
     pub fn parse(&self, buf: &[u8]) -> Result<Vec<Message>> {
         let (buf, messages) = self.parse_messages(buf).map_err(|err| match err {
             nom::Err::Error((_, e)) => ErrorKind::ParseError(e),
-            nom::Err::Incomplete(_) => panic!(),
+            nom::Err::Incomplete(_) => ErrorKind::ParsingIncomplete,
             nom::Err::Failure((_, e)) => ErrorKind::ParseError(e),
         })?;
         if !buf.is_empty() {
