@@ -141,7 +141,19 @@ impl MessageParser {
         encoded.extend([0, 0, 0, command.to_u8().unwrap()].iter());
         let payload = match self.version {
             TuyaVersion::ThreeOne => mes.payload.clone(),
-            TuyaVersion::ThreeThree => self.cipher.encrypt(&mes.payload)?,
+            TuyaVersion::ThreeThree => {
+                if let Some(CommandType::DpQuery) = mes.command {
+                    self.cipher.encrypt(&mes.payload)?
+                } else {
+                    let mut payload_with_header = Vec::new();
+                    payload_with_header.insert(0, '3' as u8);
+                    payload_with_header.insert(1, '.' as u8);
+                    payload_with_header.insert(2, '3' as u8);
+                    payload_with_header.extend(vec![0; 12]);
+                    payload_with_header.extend(self.cipher.encrypt(&mes.payload)?);
+                    payload_with_header
+                }
+            }
         };
         encoded.extend((payload.len() as u32 + 8_u32).to_be_bytes().iter());
         // let md5 = self.cipher.md5(&payload);
