@@ -140,7 +140,13 @@ impl MessageParser {
         let command = mes.command.clone().ok_or(ErrorKind::CommandTypeMissing)?;
         encoded.extend([0, 0, 0, command.to_u8().unwrap()].iter());
         let payload = match self.version {
-            TuyaVersion::ThreeOne => mes.payload.clone(),
+            TuyaVersion::ThreeOne => {
+                if encrypt {
+                    self.cipher.encrypt(&mes.payload)?
+                } else {
+                    mes.payload.clone()
+                }
+            }
             TuyaVersion::ThreeThree => {
                 if let Some(CommandType::DpQuery) = mes.command {
                     self.cipher.encrypt(&mes.payload)?
@@ -310,8 +316,25 @@ mod tests {
         ];
         let mp = MessageParser::create("3.1", None).unwrap();
         let (buf, messages) = mp.parse_messages(&packet).unwrap();
-        // assert_eq!(messages[0], expected[0]);
-        // assert_eq!(messages[1], expected[1]);
-        // assert_eq!(buf, &[] as &[u8]);
+        assert_eq!(messages[0], expected[0]);
+        assert_eq!(messages[1], expected[1]);
+        assert_eq!(buf, &[] as &[u8]);
+    }
+
+    #[test]
+    fn test_encode_with_encryption_and_version_three_one() {
+        let payload = r#"{"devId":"002004265ccf7fb1b659","dps":{"1":true,"2":0}}"#
+            .as_bytes()
+            .to_owned();
+        let mes = Message {
+            command: Some(CommandType::DpQuery),
+            payload,
+            seq_nr: Some(0),
+        };
+        let parser = MessageParser::create("3.1", None).unwrap();
+        let encrypted = parser.encode(&mes, true).unwrap();
+        let unencrypted = parser.encode(&mes, false).unwrap();
+
+        assert_ne!(encrypted, unencrypted);
     }
 }
