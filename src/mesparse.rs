@@ -322,7 +322,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_with_encryption_and_version_three_one() {
+    fn test_encode_with_and_without_encryption_and_version_three_one() {
         let payload = r#"{"devId":"002004265ccf7fb1b659","dps":{"1":true,"2":0}}"#
             .as_bytes()
             .to_owned();
@@ -334,7 +334,24 @@ mod tests {
         let parser = MessageParser::create("3.1", None).unwrap();
         let encrypted = parser.encode(&mes, true).unwrap();
         let unencrypted = parser.encode(&mes, false).unwrap();
-
+        // Only encrypt 3.1 if the flag is set
         assert_ne!(encrypted, unencrypted);
+    }
+
+    #[test]
+    fn test_encode_with_and_without_encryption_and_version_three_three() {
+        let payload = r#"{"devId":"002004265ccf7fb1b659","dps":{"1":true,"2":0}}"#
+            .as_bytes()
+            .to_owned();
+        let mes = Message {
+            command: Some(CommandType::DpQuery),
+            payload,
+            seq_nr: Some(0),
+        };
+        let parser = MessageParser::create("3.3", None).unwrap();
+        let encrypted = parser.encode(&mes, true).unwrap();
+        let unencrypted = parser.encode(&mes, false).unwrap();
+        // Always encrypt 3.3, no matter what the flag is
+        assert_eq!(encrypted, unencrypted);
     }
 }
