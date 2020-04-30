@@ -142,7 +142,7 @@ impl MessageParser {
         let payload = match self.version {
             TuyaVersion::ThreeOne => {
                 if encrypt {
-                    self.cipher.encrypt(&mes.payload)?
+                    self.create_payload_with_header(&mes.payload)?
                 } else {
                     mes.payload.clone()
                 }
@@ -151,21 +151,27 @@ impl MessageParser {
                 if let Some(CommandType::DpQuery) = mes.command {
                     self.cipher.encrypt(&mes.payload)?
                 } else {
-                    let mut payload_with_header = Vec::new();
-                    payload_with_header.extend(self.version.as_bytes());
-                    payload_with_header.extend(vec![0; 12]);
-                    payload_with_header.extend(self.cipher.encrypt(&mes.payload)?);
-                    payload_with_header
+                    self.create_payload_with_header(&mes.payload)?
                 }
             }
         };
         encoded.extend((payload.len() as u32 + 8_u32).to_be_bytes().iter());
-        // let md5 = self.cipher.md5(&payload);
         encoded.extend(payload);
         encoded.extend(crc(&encoded).to_be_bytes().iter());
         encoded.extend_from_slice(&*SUFFIX_BYTES);
 
         Ok(encoded)
+    }
+
+    fn create_payload_with_header(&self, payload: &[u8]) -> Result<Vec<u8>> {
+        let mut payload_with_header = Vec::new();
+        payload_with_header.extend(self.version.as_bytes());
+        match self.version {
+            TuyaVersion::ThreeOne => payload_with_header.extend(vec![0; 12]),
+            TuyaVersion::ThreeThree => payload_with_header.extend(self.cipher.md5(payload)),
+        }
+        payload_with_header.extend(self.cipher.encrypt(&payload)?);
+        Ok(payload_with_header)
     }
 
     pub fn parse(&self, buf: &[u8]) -> Result<Vec<Message>> {
@@ -208,7 +214,6 @@ impl MessageParser {
             } else {
                 (recv_data, 0_usize)
             };
-            // TODO: Check return code
             let (payload, rc) = recv_data.split_at(recv_data.len() - 4);
             let recv_crc = u32::from_be_bytes([rc[0], rc[1], rc[2], rc[3]]);
             if crc(&orig_buf[0..recv_data.len() + 12 + ret_len]) != recv_crc {
@@ -247,7 +252,7 @@ fn verify_key(key: Option<&str>) -> Result<Vec<u8>> {
             if key.len() == 16 {
                 return Ok(key.as_bytes().to_vec());
             } else {
-                return Err(ErrorKind::KeyLength(key.len()).into());
+                return Err(ErrorKind::KeyLength(key.len()));
             }
         }
         None => {

@@ -53,10 +53,10 @@ impl TuyaCipher {
         Ok(res.to_vec())
     }
 
-    pub fn md5(&self, data: &[u8]) -> Vec<u8> {
+    pub fn md5(&self, payload: &[u8]) -> Vec<u8> {
         let hash_line: Vec<u8> = [
             b"data=",
-            data,
+            payload,
             b"||lpv=",
             self.version.as_bytes(),
             b"||",
