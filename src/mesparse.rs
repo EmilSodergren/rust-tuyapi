@@ -84,13 +84,11 @@ impl FromStr for TuyaVersion {
 
     fn from_str(s: &str) -> Result<Self> {
         let version: Vec<&str> = s.split(".").collect();
-        if version.len() > 1 {
-            if version[0] == "3" {
-                if version[1] == "1" {
-                    return Ok(TuyaVersion::ThreeOne);
-                } else if version[1] == "3" {
-                    return Ok(TuyaVersion::ThreeThree);
-                }
+        if version.len() > 1 && version[0].ends_with("3") {
+            if version[1] == "1" {
+                return Ok(TuyaVersion::ThreeOne);
+            } else if version[1] == "3" {
+                return Ok(TuyaVersion::ThreeThree);
             }
             return Err(
                 ErrorKind::VersionError(version[0].to_string(), version[1].to_string()).into(),
@@ -282,7 +280,7 @@ mod tests {
         let version = TuyaVersion::from_str("3.1").unwrap();
         assert_eq!(version, TuyaVersion::ThreeOne);
 
-        let version2 = TuyaVersion::from_str("3.3").unwrap();
+        let version2 = TuyaVersion::from_str("ver3.3").unwrap();
         assert_eq!(version2, TuyaVersion::ThreeThree);
 
         assert!(TuyaVersion::from_str("3.4").is_err());
