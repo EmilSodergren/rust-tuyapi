@@ -2,6 +2,7 @@ use crate::cipher::TuyaCipher;
 use crate::crc::crc;
 use crate::error::ErrorKind;
 use hex::FromHex;
+use log::debug;
 use nom::{
     bytes::complete::tag,
     combinator::{map, peek, recognize},
@@ -157,6 +158,7 @@ impl MessageParser {
         encoded.extend(payload);
         encoded.extend(crc(&encoded).to_be_bytes().iter());
         encoded.extend_from_slice(&*SUFFIX_BYTES);
+        debug!("{:?}", encoded);
 
         Ok(encoded)
     }
@@ -176,7 +178,9 @@ impl MessageParser {
         let (buf, messages) = self.parse_messages(buf).map_err(|err| match err {
             nom::Err::Error((_, e)) => ErrorKind::ParseError(e),
             nom::Err::Incomplete(_) => ErrorKind::ParsingIncomplete,
-            nom::Err::Failure((_, e)) if e == nom::error::ErrorKind::Verify => ErrorKind::CRCError,
+            nom::Err::Failure((_, e)) if e == nom::error::ErrorKind::Verify => {
+                ErrorKind::ParseError(e)
+            }
             nom::Err::Failure((_, e)) => ErrorKind::ParseError(e),
         })?;
         if !buf.is_empty() {
@@ -202,12 +206,13 @@ impl MessageParser {
             let (recv_data, ret_len) = if maybe_retcode & 0xFFFFFF00 == 0 {
                 let (a, b) = recognize(be_u32)(recv_data)?;
                 let ret_code = u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
-                if ret_code != 0 {
-                    return Err(nom::Err::Failure((
-                        &[] as &[u8],
-                        nom::error::ErrorKind::Verify,
-                    )));
-                }
+                println!("Retcode was {}", ret_code);
+                // if ret_code != 0 {
+                //     return Err(nom::Err::Failure((
+                //         &[] as &[u8],
+                //         nom::error::ErrorKind::Verify,
+                //     )));
+                // }
                 (a, 4_usize)
             } else {
                 (recv_data, 0_usize)
@@ -296,6 +301,36 @@ mod tests {
             seq_nr: Some(0),
         };
         let mp = MessageParser::create("3.1", None).unwrap();
+        let (buf, messages) = mp.parse_messages(&packet).unwrap();
+        assert_eq!(messages[0], expected);
+        assert_eq!(buf, &[] as &[u8]);
+    }
+
+    #[test]
+    //fn test_parse_stuff() {
+    //    let packet =
+    //        hex::decode("000055aa000000000000000700000057332e33290725773ab6c9a1184b38fc8f439ca4abe8d958d12d34a39a6bf230c7ed59d77c0499f0f543640ae8a029957a55b39b5d0213726b385ece93bf5ae2330f71be0f0390f4075008032a6247501f0b14b10000aa55").unwrap();
+    //    let expected = Message {
+    //        command: Some(CommandType::Control),
+    //        payload: Vec::new(),
+    //        seq_nr: Some(0),
+    //    };
+    //    let mp = MessageParser::create("3.3", None).unwrap();
+    //    let (buf, messages) = mp.parse_messages(&packet).unwrap();
+    //    assert_eq!(messages[0], expected);
+    //    assert_eq!(buf, &[] as &[u8]);
+    //}
+    //
+    #[test]
+    fn test_parse_data_format_error() {
+        let packet =
+            hex::decode("000055aa000000000000000700000037332e33d504910232d355a59ed1f6ed1f4a816a1e8e30ed09987c020ae45d72c70592bb233c79c43a5b9ae49b6ead38715e3e9d0000aa55").unwrap();
+        let expected = Message {
+            command: Some(CommandType::Control),
+            payload: "data format error".as_bytes().to_owned(),
+            seq_nr: Some(0),
+        };
+        let mp = MessageParser::create("3.3", None).unwrap();
         let (buf, messages) = mp.parse_messages(&packet).unwrap();
         assert_eq!(messages[0], expected);
         assert_eq!(buf, &[] as &[u8]);
