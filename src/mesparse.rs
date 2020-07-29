@@ -2,7 +2,7 @@ use crate::cipher::TuyaCipher;
 use crate::crc::crc;
 use crate::error::ErrorKind;
 use hex::FromHex;
-use log::debug;
+use log::{debug, error};
 use nom::{
     bytes::complete::tag,
     combinator::{map, peek, recognize},
@@ -216,7 +216,7 @@ impl MessageParser {
             let (payload, rc) = recv_data.split_at(recv_data.len() - 4);
             let recv_crc = u32::from_be_bytes([rc[0], rc[1], rc[2], rc[3]]);
             if crc(&orig_buf[0..recv_data.len() + 12 + ret_len]) != recv_crc {
-                println!(
+                error!(
                     "Found CRC: {:#x}, Expected CRC: {:#x}",
                     recv_crc,
                     crc(&orig_buf[0..recv_data.len() + 12 + ret_len])
