@@ -304,21 +304,23 @@ mod tests {
         assert_eq!(buf, &[] as &[u8]);
     }
 
-    // #[test]
-    //fn test_parse_stuff() {
-    //    let packet =
-    //        hex::decode("000055aa000000000000000700000057332e33290725773ab6c9a1184b38fc8f439ca4abe8d958d12d34a39a6bf230c7ed59d77c0499f0f543640ae8a029957a55b39b5d0213726b385ece93bf5ae2330f71be0f0390f4075008032a6247501f0b14b10000aa55").unwrap();
-    //    let expected = Message {
-    //        command: Some(CommandType::Control),
-    //        payload: Vec::new(),
-    //        seq_nr: Some(0),
-    //        ret_code: Some(0),
-    //    };
-    //    let mp = MessageParser::create("3.3", None).unwrap();
-    //    let (buf, messages) = mp.parse_messages(&packet).unwrap();
-    //    assert_eq!(messages[0], expected);
-    //    assert_eq!(buf, &[] as &[u8]);
-    //}
+    #[test]
+    fn test_parse_messages_with_payload() {
+        let packet =
+            hex::decode("000055aa00000000000000070000005b00000000332e33290725773ab6c9a1184b38fc8f439ca4abe8d958d12d34a39a6bf230c7ed59d77c0499f0f543640ae8a029957a55b39b5d0213726b385ece93bf5ae2330f71be0f0390f4075008032a624750cd3bfb680000aa55").unwrap();
+        let expected = Message {
+            command: Some(CommandType::Control),
+            payload: r#"{"dev_id":"46052834d8f15b92e53b","dps":{"1":true}}"#
+                .as_bytes()
+                .to_owned(),
+            seq_nr: Some(0),
+            ret_code: Some(0),
+        };
+        let mp = MessageParser::create("3.3", None).unwrap();
+        let (buf, messages) = mp.parse_messages(&packet).unwrap();
+        assert_eq!(messages[0], expected);
+        assert_eq!(buf, &[] as &[u8]);
+    }
 
     #[test]
     fn test_parse_data_format_error() {
