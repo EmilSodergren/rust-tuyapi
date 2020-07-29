@@ -2,6 +2,7 @@ use crate::cipher::TuyaCipher;
 use crate::crc::crc;
 use crate::error::ErrorKind;
 use hex::FromHex;
+use log::{debug, error};
 use nom::{
     bytes::complete::tag,
     combinator::{map, peek, recognize},
@@ -103,6 +104,7 @@ pub struct Message {
     payload: Vec<u8>,
     command: Option<CommandType>,
     seq_nr: Option<u32>,
+    ret_code: Option<u8>,
 }
 
 impl Message {
@@ -111,6 +113,7 @@ impl Message {
             payload: payload.to_vec(),
             command: Some(command),
             seq_nr,
+            ret_code: None,
         }
     }
 }
@@ -157,6 +160,7 @@ impl MessageParser {
         encoded.extend(payload);
         encoded.extend(crc(&encoded).to_be_bytes().iter());
         encoded.extend_from_slice(&*SUFFIX_BYTES);
+        debug!("{:?}", encoded);
 
         Ok(encoded)
     }
@@ -176,7 +180,7 @@ impl MessageParser {
         let (buf, messages) = self.parse_messages(buf).map_err(|err| match err {
             nom::Err::Error((_, e)) => ErrorKind::ParseError(e),
             nom::Err::Incomplete(_) => ErrorKind::ParsingIncomplete,
-            nom::Err::Failure((_, e)) if e == nom::error::ErrorKind::Verify => ErrorKind::CRCError,
+            nom::Err::Failure((_, e)) if e == nom::error::ErrorKind::ManyMN => ErrorKind::CRCError,
             nom::Err::Failure((_, e)) => ErrorKind::ParseError(e),
         })?;
         if !buf.is_empty() {
@@ -199,30 +203,25 @@ impl MessageParser {
         for (_, seq_nr, command, recv_data, _) in vec {
             // check if the recv_data contains a return code
             let (recv_data, maybe_retcode) = peek(be_u32)(recv_data)?;
-            let (recv_data, ret_len) = if maybe_retcode & 0xFFFFFF00 == 0 {
-                let (a, b) = recognize(be_u32)(recv_data)?;
-                let ret_code = u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
-                if ret_code != 0 {
-                    return Err(nom::Err::Failure((
-                        &[] as &[u8],
-                        nom::error::ErrorKind::Verify,
-                    )));
-                }
-                (a, 4_usize)
+            let (recv_data, ret_code, ret_len) = if maybe_retcode & 0xFFFFFF00 == 0 {
+                // Has a return code
+                let (recv_data, ret_code) = recognize(be_u32)(recv_data)?;
+                (recv_data, Some(ret_code[3]), 4_usize)
             } else {
-                (recv_data, 0_usize)
+                // Has no return code
+                (recv_data, None, 0_usize)
             };
             let (payload, rc) = recv_data.split_at(recv_data.len() - 4);
             let recv_crc = u32::from_be_bytes([rc[0], rc[1], rc[2], rc[3]]);
             if crc(&orig_buf[0..recv_data.len() + 12 + ret_len]) != recv_crc {
-                println!(
+                error!(
                     "Found CRC: {:#x}, Expected CRC: {:#x}",
                     recv_crc,
                     crc(&orig_buf[0..recv_data.len() + 12 + ret_len])
                 );
-                // I hijack the ErrorKind::Verify here to propagate a CRC error
+                // I hijack the ErrorKind::ManyMN here to propagate a CRC error
                 // TODO: should probably create and use a special CRC error here
-                return Err(nom::Err::Failure((rc, nom::error::ErrorKind::Verify)));
+                return Err(nom::Err::Failure((rc, nom::error::ErrorKind::ManyMN)));
             }
 
             let payload = self.try_decrypt(payload);
@@ -230,6 +229,7 @@ impl MessageParser {
                 payload,
                 command: FromPrimitive::from_u32(command).or(None),
                 seq_nr: Some(seq_nr),
+                ret_code,
             };
             messages.push(message);
         }
@@ -294,8 +294,43 @@ mod tests {
             command: Some(CommandType::HeartBeat),
             payload: Vec::new(),
             seq_nr: Some(0),
+            ret_code: Some(0),
         };
         let mp = MessageParser::create("3.1", None).unwrap();
+        let (buf, messages) = mp.parse_messages(&packet).unwrap();
+        assert_eq!(messages[0], expected);
+        assert_eq!(buf, &[] as &[u8]);
+    }
+
+    #[test]
+    fn test_parse_messages_with_payload() {
+        let packet =
+            hex::decode("000055aa00000000000000070000005b00000000332e33290725773ab6c9a1184b38fc8f439ca4abe8d958d12d34a39a6bf230c7ed59d77c0499f0f543640ae8a029957a55b39b5d0213726b385ece93bf5ae2330f71be0f0390f4075008032a624750cd3bfb680000aa55").unwrap();
+        let expected = Message {
+            command: Some(CommandType::Control),
+            payload: r#"{"dev_id":"46052834d8f15b92e53b","dps":{"1":true}}"#
+                .as_bytes()
+                .to_owned(),
+            seq_nr: Some(0),
+            ret_code: Some(0),
+        };
+        let mp = MessageParser::create("3.3", None).unwrap();
+        let (buf, messages) = mp.parse_messages(&packet).unwrap();
+        assert_eq!(messages[0], expected);
+        assert_eq!(buf, &[] as &[u8]);
+    }
+
+    #[test]
+    fn test_parse_data_format_error() {
+        let packet =
+            hex::decode("000055aa00000000000000070000003b00000001332e33d504910232d355a59ed1f6ed1f4a816a1e8e30ed09987c020ae45d72c70592bb233c79c43a5b9ae49b6ead38725deb520000aa55").unwrap();
+        let expected = Message {
+            command: Some(CommandType::Control),
+            payload: "data format error".as_bytes().to_owned(),
+            seq_nr: Some(0),
+            ret_code: Some(1),
+        };
+        let mp = MessageParser::create("3.3", None).unwrap();
         let (buf, messages) = mp.parse_messages(&packet).unwrap();
         assert_eq!(messages[0], expected);
         assert_eq!(buf, &[] as &[u8]);
@@ -310,11 +345,13 @@ mod tests {
                 command: Some(CommandType::HeartBeat),
                 payload: Vec::new(),
                 seq_nr: Some(0),
+                ret_code: Some(0),
             },
             Message {
                 command: Some(CommandType::DpQuery),
                 payload: Vec::new(),
                 seq_nr: Some(0),
+                ret_code: Some(0),
             },
         ];
         let mp = MessageParser::create("3.1", None).unwrap();
@@ -333,6 +370,7 @@ mod tests {
             command: Some(CommandType::DpQuery),
             payload,
             seq_nr: Some(0),
+            ret_code: Some(0),
         };
         let parser = MessageParser::create("3.1", None).unwrap();
         let encrypted = parser.encode(&mes, true).unwrap();
@@ -350,6 +388,7 @@ mod tests {
             command: Some(CommandType::DpQuery),
             payload,
             seq_nr: Some(0),
+            ret_code: Some(0),
         };
         let parser = MessageParser::create("3.3", None).unwrap();
         let encrypted = parser.encode(&mes, true).unwrap();

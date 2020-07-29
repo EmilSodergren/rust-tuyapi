@@ -19,6 +19,7 @@ json = "0.12"
 num-derive = "0.3"
 num-traits = "0.2"
 serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 openssl = "0.10"
 base64 = "0.12"
 md5 = "0.7"
