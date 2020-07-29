@@ -180,9 +180,7 @@ impl MessageParser {
         let (buf, messages) = self.parse_messages(buf).map_err(|err| match err {
             nom::Err::Error((_, e)) => ErrorKind::ParseError(e),
             nom::Err::Incomplete(_) => ErrorKind::ParsingIncomplete,
-            nom::Err::Failure((_, e)) if e == nom::error::ErrorKind::Verify => {
-                ErrorKind::ParseError(e)
-            }
+            nom::Err::Failure((_, e)) if e == nom::error::ErrorKind::ManyMN => ErrorKind::CRCError,
             nom::Err::Failure((_, e)) => ErrorKind::ParseError(e),
         })?;
         if !buf.is_empty() {
@@ -221,9 +219,9 @@ impl MessageParser {
                     recv_crc,
                     crc(&orig_buf[0..recv_data.len() + 12 + ret_len])
                 );
-                // I hijack the ErrorKind::Verify here to propagate a CRC error
+                // I hijack the ErrorKind::ManyMN here to propagate a CRC error
                 // TODO: should probably create and use a special CRC error here
-                return Err(nom::Err::Failure((rc, nom::error::ErrorKind::Verify)));
+                return Err(nom::Err::Failure((rc, nom::error::ErrorKind::ManyMN)));
             }
 
             let payload = self.try_decrypt(payload);
