@@ -16,6 +16,7 @@ pub enum ErrorKind {
     KeyLength(usize),
     ParseError(nom::error::ErrorKind),
     ParsingIncomplete,
+    SystemTimeError(std::time::SystemTimeError),
     VersionError(String, String),
 }
 
@@ -34,6 +35,7 @@ impl fmt::Display for ErrorKind {
             KeyLength(s) => format!("The key length is {}, should be 16", s),
             ParseError(err) => format!("Parsing failed with {}", err.description()),
             ParsingIncomplete => format!("Data was incomplete. Error while parsing the received data"),
+            SystemTimeError(err) => format!("{}", err),
             VersionError(maj, min) => format!("The given version {}.{} is not valid", maj, min),
         };
         write!(f, "{}", msg)
