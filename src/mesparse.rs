@@ -15,6 +15,7 @@ use nom::{
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::cmp::PartialEq;
+use std::fmt;
 use std::str::FromStr;
 
 pub type Result<T> = std::result::Result<T, ErrorKind>;
@@ -107,6 +108,19 @@ pub struct Message {
     ret_code: Option<u8>,
 }
 
+impl fmt::Display for Message {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Payload: \"{}\", Control {:?}, Seq Nr: {:?}, Return Code: {:?}",
+            std::str::from_utf8(&self.payload).expect("Payload: Not parseable UTF-8"),
+            self.command,
+            self.seq_nr,
+            self.ret_code
+        )
+    }
+}
+
 impl Message {
     pub fn new(payload: &[u8], command: CommandType, seq_nr: Option<u32>) -> Message {
         Message {
@@ -138,6 +152,7 @@ impl MessageParser {
             Some(nr) => encoded.extend(&nr.to_be_bytes()),
             None => encoded.extend(&0_u32.to_be_bytes()),
         }
+        debug!("Received payload: {:?}", &mes.payload);
         let command = mes.command.clone().ok_or(ErrorKind::CommandTypeMissing)?;
         encoded.extend([0, 0, 0, command.to_u8().unwrap()].iter());
         let payload = match self.version {
@@ -160,7 +175,7 @@ impl MessageParser {
         encoded.extend(payload);
         encoded.extend(crc(&encoded).to_be_bytes().iter());
         encoded.extend_from_slice(&*SUFFIX_BYTES);
-        debug!("{:?}", encoded);
+        debug!("Encoded message {:?}", &encoded);
 
         Ok(encoded)
     }
