@@ -55,6 +55,5 @@ fn get_socket_state(state: &str) -> HashMap<String, serde_json::Value> {
     } else {
         map.insert("1".to_string(), serde_json::to_value(false).unwrap());
     }
-    // map.insert("2".to_string(), serde_json::to_value(0).unwrap());
     map
 }
