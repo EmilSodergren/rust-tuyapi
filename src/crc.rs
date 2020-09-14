@@ -43,7 +43,7 @@ pub fn crc(bytes: &[u8]) -> u32 {
         crc = (crc >> 8) ^ CRC32TABLE[index];
     }
 
-    return crc ^ 0xFFFF_FFFF;
+    crc ^ 0xFFFF_FFFF
 }
 
 #[test]

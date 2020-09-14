@@ -9,7 +9,6 @@ extern crate num_derive;
 extern crate lazy_static;
 
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::time::SystemTime;
 
 use std::collections::HashMap;
@@ -35,11 +34,11 @@ pub fn get_payload(device_id: &str, tt: TuyaType, state: &str) -> mesparse::Resu
         uid: "".to_string(),
         t: SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(|e| error::ErrorKind::SystemTimeError(e))?
+            .map_err(error::ErrorKind::SystemTimeError)?
             .as_secs(),
         dps: get_dps_for(tt, state),
     })
-    .map_err(|e| error::ErrorKind::JsonError(e))
+    .map_err(error::ErrorKind::JsonError)
 }
 
 fn get_dps_for(tt: TuyaType, state: &str) -> HashMap<String, serde_json::Value> {

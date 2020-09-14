@@ -75,8 +75,8 @@ pub(crate) enum TuyaVersion {
 impl TuyaVersion {
     pub fn as_bytes(&self) -> &[u8] {
         match &self {
-            TuyaVersion::ThreeOne => "3.1".as_bytes(),
-            TuyaVersion::ThreeThree => "3.3".as_bytes(),
+            TuyaVersion::ThreeOne => b"3.1",
+            TuyaVersion::ThreeThree => b"3.3",
         }
     }
 }
@@ -85,18 +85,22 @@ impl FromStr for TuyaVersion {
     type Err = ErrorKind;
 
     fn from_str(s: &str) -> Result<Self> {
-        let version: Vec<&str> = s.split(".").collect();
-        if version.len() > 1 && version[0].ends_with("3") {
+        let version: Vec<&str> = s.split('.').collect();
+        if version.len() > 1 && version[0].ends_with('3') {
             if version[1] == "1" {
                 return Ok(TuyaVersion::ThreeOne);
             } else if version[1] == "3" {
                 return Ok(TuyaVersion::ThreeThree);
             }
-            return Err(
-                ErrorKind::VersionError(version[0].to_string(), version[1].to_string()).into(),
-            );
+            return Err(ErrorKind::VersionError(
+                version[0].to_string(),
+                version[1].to_string(),
+            ));
         }
-        Err(ErrorKind::VersionError("Unknown".to_string(), "Unknown".to_string()).into())
+        Err(ErrorKind::VersionError(
+            "Unknown".to_string(),
+            "Unknown".to_string(),
+        ))
     }
 }
 
@@ -218,7 +222,7 @@ impl MessageParser {
         for (_, seq_nr, command, recv_data, _) in vec {
             // check if the recv_data contains a return code
             let (recv_data, maybe_retcode) = peek(be_u32)(recv_data)?;
-            let (recv_data, ret_code, ret_len) = if maybe_retcode & 0xFFFFFF00 == 0 {
+            let (recv_data, ret_code, ret_len) = if maybe_retcode & 0xFFFF_FF00 == 0 {
                 // Has a return code
                 let (recv_data, ret_code) = recognize(be_u32)(recv_data)?;
                 (recv_data, Some(ret_code[3]), 4_usize)
@@ -263,14 +267,14 @@ fn verify_key(key: Option<&str>) -> Result<Vec<u8>> {
     match key {
         Some(key) => {
             if key.len() == 16 {
-                return Ok(key.as_bytes().to_vec());
+                Ok(key.as_bytes().to_vec())
             } else {
-                return Err(ErrorKind::KeyLength(key.len()));
+                Err(ErrorKind::KeyLength(key.len()))
             }
         }
         None => {
             let default_key = md5::compute(UDP_KEY).0;
-            return Ok(default_key.to_vec());
+            Ok(default_key.to_vec())
         }
     }
 }

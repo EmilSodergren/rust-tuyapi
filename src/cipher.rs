@@ -29,8 +29,8 @@ impl TuyaCipher {
     }
 
     pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let res = encrypt(self.cipher, &self.key, None, data)
-            .map_err(|e| ErrorKind::EncryptionError(e))?;
+        let res =
+            encrypt(self.cipher, &self.key, None, data).map_err(ErrorKind::EncryptionError)?;
         match self.version {
             TuyaVersion::ThreeOne => Ok(base64::encode(res).as_bytes().to_vec()),
             TuyaVersion::ThreeThree => Ok(res),
@@ -42,13 +42,11 @@ impl TuyaCipher {
         let data = maybe_strip_header(&self.version, &data);
         // 3.1 is base64 encoded, 3.3 is not
         let data = match self.version {
-            TuyaVersion::ThreeOne => {
-                base64::decode(&data).map_err(|e| ErrorKind::Base64DecodeError(e))?
-            }
+            TuyaVersion::ThreeOne => base64::decode(&data).map_err(ErrorKind::Base64DecodeError)?,
             TuyaVersion::ThreeThree => data.to_vec(),
         };
-        let res = decrypt(self.cipher, &self.key, None, &data)
-            .map_err(|e| ErrorKind::DecryptionError(e))?;
+        let res =
+            decrypt(self.cipher, &self.key, None, &data).map_err(ErrorKind::DecryptionError)?;
 
         Ok(res.to_vec())
     }
@@ -64,7 +62,7 @@ impl TuyaCipher {
         ]
         .iter()
         .flat_map(|bytes| bytes.iter())
-        .map(|v| *v)
+        .copied()
         .collect();
         let digest: [u8; 16] = md5::compute(hash_line).into();
         digest[4..16].to_vec()

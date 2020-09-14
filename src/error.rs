@@ -25,16 +25,16 @@ impl fmt::Display for ErrorKind {
         use ErrorKind::*;
         let msg = match &self {
             Base64DecodeError(err) => format!("String failed to decode as base64, error was: {}", err),
-            BufferNotCompletelyParsedError => format!("Something went wrong when parsing the received buffer. It still contains data after parsing is done."),
-            CanNotEncodeMessageWithoutCommand => format!("Can not encode messages that are missing CommandType"),
-            CommandTypeMissing => format!("No CommandType was supplied in message"),
-            CRCError => format!("Error: CRC mismatch"),
+            BufferNotCompletelyParsedError => "Something went wrong when parsing the received buffer. It still contains data after parsing is done.".to_string(),
+            CanNotEncodeMessageWithoutCommand => "Can not encode messages that are missing CommandType".to_string(),
+            CommandTypeMissing => "No CommandType was supplied in message".to_string(),
+            CRCError => "Error: CRC mismatch".to_string(),
             DecryptionError(err) => format!("Decryption failed with: {}", err),
             EncryptionError(err) => format!("Encryption failed with: {}", err),
             JsonError(err) => format!("Json failed: {}", err),
             KeyLength(s) => format!("The key length is {}, should be 16", s),
             ParseError(err) => format!("Parsing failed with {}", err.description()),
-            ParsingIncomplete => format!("Data was incomplete. Error while parsing the received data"),
+            ParsingIncomplete => "Data was incomplete. Error while parsing the received data".to_string(),
             SystemTimeError(err) => format!("{}", err),
             VersionError(maj, min) => format!("The given version {}.{} is not valid", maj, min),
         };
