@@ -8,6 +8,8 @@ os:
 arch:
     - amd64
     - arm64
+
+cargo: cache
 jobs:
     allow_failures:
         - rust: nightly
