@@ -8,6 +8,7 @@ os:
 arch:
     - amd64
     - arm64
+    - arm32
 
 cargo: cache
 jobs:
