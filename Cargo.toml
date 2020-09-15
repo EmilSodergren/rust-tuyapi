@@ -4,7 +4,11 @@ version = "0.1.0"
 authors = ["Emil Sodergren <EmilSodergren@users.noreply.github.com>"]
 edition = "2018"
 description = "This package is a rust port of the exellent NodeJS implementation by codetheweb for the Tuya API"
-homepage = ""
+homepage = "https://github.com/EmilSodergren/rust-tuyapi"
+repository = "https://github.com/EmilSodergren/rust-tuyapi"
+license = "MIT"
+licensefile = "LICENSE"
+keywords = ["tuya", "smart home", "smart life"]
 
 [lib]
 doctest = false
