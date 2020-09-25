@@ -274,18 +274,16 @@ impl TuyaDevice {
             Some(addr) => addr,
             None => return Err(ErrorKind::ParsingIncomplete),
         };
-        let mut tcpstream = TcpStream::connect(addr).map_err(|e| ErrorKind::TcpError(e))?;
+        let mut tcpstream = TcpStream::connect(addr).map_err(ErrorKind::TcpError)?;
         info!("Connected to the device on ip {}", addr);
         debug!("Writing message {} to {}", &tuya_payload, addr);
         let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, Some(seq_id));
         let bts = tcpstream
             .write(&self.encode(&mes, true)?)
-            .map_err(|e| ErrorKind::TcpError(e))?;
+            .map_err(ErrorKind::TcpError)?;
         info!("Wrote {} bytes.", bts);
         let mut buf = [0; 256];
-        let bts = tcpstream
-            .read(&mut buf)
-            .map_err(|e| ErrorKind::TcpError(e))?;
+        let bts = tcpstream.read(&mut buf).map_err(ErrorKind::TcpError)?;
         info!("Received {} bytes", bts);
         if bts > 0 {
             debug!("{:?}", &buf[..bts]);
@@ -297,7 +295,7 @@ impl TuyaDevice {
         debug!("shutting down connection");
         tcpstream
             .shutdown(Shutdown::Both)
-            .map_err(|e| ErrorKind::TcpError(e))?;
+            .map_err(ErrorKind::TcpError)?;
         Ok(())
     }
 }
