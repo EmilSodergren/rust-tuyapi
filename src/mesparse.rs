@@ -1,7 +1,6 @@
 use crate::cipher::TuyaCipher;
 use crate::crc::crc;
 use crate::error::ErrorKind;
-use atomic_counter::{AtomicCounter, RelaxedCounter};
 use hex::FromHex;
 use log::{debug, error, info};
 use nom::{
@@ -14,7 +13,6 @@ use nom::{
 };
 use std::io::prelude::*;
 use std::net::{Shutdown, SocketAddr, TcpStream};
-use std::sync::Arc;
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
@@ -271,7 +269,7 @@ impl TuyaDevice {
         }
     }
 
-    pub fn set(&self, tuya_payload: &str, counter: Arc<RelaxedCounter>) -> Result<()> {
+    pub fn set(&self, tuya_payload: &str, seq_id: u32) -> Result<()> {
         let addr = match self.addr {
             Some(addr) => addr,
             None => return Err(ErrorKind::ParsingIncomplete),
@@ -279,11 +277,7 @@ impl TuyaDevice {
         let mut tcpstream = TcpStream::connect(addr).map_err(|e| ErrorKind::TcpError(e))?;
         info!("Connected to the device on ip {}", addr);
         debug!("Writing message {} to {}", &tuya_payload, addr);
-        let mes = Message::new(
-            tuya_payload.as_bytes(),
-            CommandType::Control,
-            Some(counter.inc() as u32),
-        );
+        let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, Some(seq_id));
         let bts = tcpstream
             .write(&self.encode(&mes, true)?)
             .map_err(|e| ErrorKind::TcpError(e))?;
