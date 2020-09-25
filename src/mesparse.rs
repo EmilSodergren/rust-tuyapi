@@ -1,8 +1,9 @@
 use crate::cipher::TuyaCipher;
 use crate::crc::crc;
 use crate::error::ErrorKind;
+use atomic_counter::{AtomicCounter, RelaxedCounter};
 use hex::FromHex;
-use log::{debug, error};
+use log::{debug, error, info};
 use nom::{
     bytes::complete::tag,
     combinator::{map, peek, recognize},
@@ -11,6 +12,9 @@ use nom::{
     sequence::tuple,
     IResult,
 };
+use std::io::prelude::*;
+use std::net::{Shutdown, SocketAddr, TcpStream};
+use std::sync::Arc;
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
@@ -136,17 +140,22 @@ impl Message {
     }
 }
 
-pub struct MessageParser {
+pub struct TuyaDevice {
     version: TuyaVersion,
     cipher: TuyaCipher,
+    addr: Option<SocketAddr>,
 }
 
-impl MessageParser {
-    pub fn create(ver: &str, key: Option<&str>) -> Result<MessageParser> {
+impl TuyaDevice {
+    pub fn create(ver: &str, key: Option<&str>, addr: Option<SocketAddr>) -> Result<TuyaDevice> {
         let version = TuyaVersion::from_str(ver)?;
         let key = verify_key(key)?;
         let cipher = TuyaCipher::create(&key, version.clone());
-        Ok(MessageParser { version, cipher })
+        Ok(TuyaDevice {
+            version,
+            cipher,
+            addr,
+        })
     }
 
     pub fn encode(&self, mes: &Message, encrypt: bool) -> Result<Vec<u8>> {
@@ -261,6 +270,42 @@ impl MessageParser {
             Err(_) => payload.to_vec(),
         }
     }
+
+    pub fn set(&self, tuya_payload: &str, counter: Arc<RelaxedCounter>) -> Result<()> {
+        let addr = match self.addr {
+            Some(addr) => addr,
+            None => return Err(ErrorKind::ParsingIncomplete),
+        };
+        let mut tcpstream = TcpStream::connect(addr).map_err(|e| ErrorKind::TcpError(e))?;
+        info!("Connected to the device on ip {}", addr);
+        debug!("Writing message {} to {}", &tuya_payload, addr);
+        let mes = Message::new(
+            tuya_payload.as_bytes(),
+            CommandType::Control,
+            Some(counter.inc() as u32),
+        );
+        let bts = tcpstream
+            .write(&self.encode(&mes, true)?)
+            .map_err(|e| ErrorKind::TcpError(e))?;
+        info!("Wrote {} bytes.", bts);
+        let mut buf = [0; 256];
+        let bts = tcpstream
+            .read(&mut buf)
+            .map_err(|e| ErrorKind::TcpError(e))?;
+        info!("Received {} bytes", bts);
+        if bts > 0 {
+            debug!("{:?}", &buf[..bts]);
+            // TODO: Can receive more than one message
+            let message = self.parse(&buf[..bts])?;
+            info!("Tuya device replied {}", &message[0]);
+        }
+
+        debug!("shutting down connection");
+        tcpstream
+            .shutdown(Shutdown::Both)
+            .map_err(|e| ErrorKind::TcpError(e))?;
+        Ok(())
+    }
 }
 
 fn verify_key(key: Option<&str>) -> Result<Vec<u8>> {
@@ -315,7 +360,7 @@ mod tests {
             seq_nr: Some(0),
             ret_code: Some(0),
         };
-        let mp = MessageParser::create("3.1", None).unwrap();
+        let mp = TuyaDevice::create("3.1", None, None).unwrap();
         let (buf, messages) = mp.parse_messages(&packet).unwrap();
         assert_eq!(messages[0], expected);
         assert_eq!(buf, &[] as &[u8]);
@@ -333,7 +378,7 @@ mod tests {
             seq_nr: Some(0),
             ret_code: Some(0),
         };
-        let mp = MessageParser::create("3.3", None).unwrap();
+        let mp = TuyaDevice::create("3.3", None, None).unwrap();
         let (buf, messages) = mp.parse_messages(&packet).unwrap();
         assert_eq!(messages[0], expected);
         assert_eq!(buf, &[] as &[u8]);
@@ -349,7 +394,7 @@ mod tests {
             seq_nr: Some(0),
             ret_code: Some(1),
         };
-        let mp = MessageParser::create("3.3", None).unwrap();
+        let mp = TuyaDevice::create("3.3", None, None).unwrap();
         let (buf, messages) = mp.parse_messages(&packet).unwrap();
         assert_eq!(messages[0], expected);
         assert_eq!(buf, &[] as &[u8]);
@@ -373,7 +418,7 @@ mod tests {
                 ret_code: Some(0),
             },
         ];
-        let mp = MessageParser::create("3.1", None).unwrap();
+        let mp = TuyaDevice::create("3.1", None, None).unwrap();
         let (buf, messages) = mp.parse_messages(&packet).unwrap();
         assert_eq!(messages[0], expected[0]);
         assert_eq!(messages[1], expected[1]);
@@ -391,7 +436,7 @@ mod tests {
             seq_nr: Some(0),
             ret_code: Some(0),
         };
-        let parser = MessageParser::create("3.1", None).unwrap();
+        let parser = TuyaDevice::create("3.1", None, None).unwrap();
         let encrypted = parser.encode(&mes, true).unwrap();
         let unencrypted = parser.encode(&mes, false).unwrap();
         // Only encrypt 3.1 if the flag is set
@@ -409,7 +454,8 @@ mod tests {
             seq_nr: Some(0),
             ret_code: Some(0),
         };
-        let parser = MessageParser::create("3.3", None).unwrap();
+        let parser = TuyaDevice::create("3.3", None, None).unwrap();
+
         let encrypted = parser.encode(&mes, true).unwrap();
         let unencrypted = parser.encode(&mes, false).unwrap();
         // Always encrypt 3.3, no matter what the flag is

@@ -2,6 +2,7 @@ use base64::DecodeError;
 use openssl::error::ErrorStack;
 use std::error::Error;
 use std::fmt;
+use std::io;
 
 #[derive(Debug)]
 pub enum ErrorKind {
@@ -14,9 +15,11 @@ pub enum ErrorKind {
     EncryptionError(ErrorStack),
     JsonError(serde_json::error::Error),
     KeyLength(usize),
+    MissingAddressError,
     ParseError(nom::error::ErrorKind),
     ParsingIncomplete,
     SystemTimeError(std::time::SystemTimeError),
+    TcpError(io::Error),
     VersionError(String, String),
 }
 
@@ -33,9 +36,11 @@ impl fmt::Display for ErrorKind {
             EncryptionError(err) => format!("Encryption failed with: {}", err),
             JsonError(err) => format!("Json failed: {}", err),
             KeyLength(s) => format!("The key length is {}, should be 16", s),
+            MissingAddressError => "The TuyaDevice is not created with a socket address. Can not set object.".to_string(),
             ParseError(err) => format!("Parsing failed with {}", err.description()),
             ParsingIncomplete => "Data was incomplete. Error while parsing the received data".to_string(),
             SystemTimeError(err) => format!("{}", err),
+            TcpError(err) => format!("Could not write to TcpStream. Error: {}", err),
             VersionError(maj, min) => format!("The given version {}.{} is not valid", maj, min),
         };
         write!(f, "{}", msg)
