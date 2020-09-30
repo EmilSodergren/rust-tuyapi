@@ -118,11 +118,11 @@ impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Payload: \"{}\", Control {:?}, Seq Nr: {:?}, Return Code: {:?}",
+            "Payload: \"{}\", Control {:?}, Seq Nr: {}, Return Code: {}",
             std::str::from_utf8(&self.payload).expect("Payload: Not parseable UTF-8"),
-            self.command,
-            self.seq_nr,
-            self.ret_code
+            self.command.clone().unwrap_or(CommandType::Error),
+            self.seq_nr.unwrap_or(0),
+            self.ret_code.unwrap_or(255)
         )
     }
 }
@@ -163,7 +163,6 @@ impl TuyaDevice {
             Some(nr) => encoded.extend(&nr.to_be_bytes()),
             None => encoded.extend(&0_u32.to_be_bytes()),
         }
-        debug!("Received payload: {:?}", &mes.payload);
         let command = mes.command.clone().ok_or(ErrorKind::CommandTypeMissing)?;
         encoded.extend([0, 0, 0, command.to_u8().unwrap()].iter());
         let payload = match self.version {
@@ -186,7 +185,11 @@ impl TuyaDevice {
         encoded.extend(payload);
         encoded.extend(crc(&encoded).to_be_bytes().iter());
         encoded.extend_from_slice(&*SUFFIX_BYTES);
-        debug!("Encoded message {:?}", &encoded);
+        debug!(
+            "Encoded message ({}):\n{}",
+            mes.seq_nr.unwrap_or(0),
+            hex::encode(&encoded)
+        );
 
         Ok(encoded)
     }
@@ -277,7 +280,10 @@ impl TuyaDevice {
         let mut tcpstream = TcpStream::connect(addr).map_err(ErrorKind::TcpError)?;
         tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
         info!("Connected to the device on ip {}", addr);
-        debug!("Writing message {} to {}", &tuya_payload, addr);
+        info!(
+            "Writing message to {} ({}):\n{}",
+            addr, seq_id, &tuya_payload
+        );
         let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, Some(seq_id));
         let bts = tcpstream
             .write(&self.encode(&mes, true)?)
@@ -287,10 +293,14 @@ impl TuyaDevice {
         let bts = tcpstream.read(&mut buf).map_err(ErrorKind::TcpError)?;
         info!("Received {} bytes", bts);
         if bts > 0 {
-            debug!("{:?}", &buf[..bts]);
+            debug!(
+                "Received message ({}):\n{}",
+                seq_id,
+                hex::encode(&buf[..bts])
+            );
             // TODO: Can receive more than one message
             let message = self.parse(&buf[..bts])?;
-            info!("Tuya device replied {}", &message[0]);
+            info!("Decoded message ({}):\n{}", seq_id, &message[0]);
         }
 
         debug!("shutting down connection");
