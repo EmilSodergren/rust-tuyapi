@@ -275,6 +275,7 @@ impl TuyaDevice {
             None => return Err(ErrorKind::ParsingIncomplete),
         };
         let mut tcpstream = TcpStream::connect(addr).map_err(ErrorKind::TcpError)?;
+        tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
         info!("Connected to the device on ip {}", addr);
         debug!("Writing message {} to {}", &tuya_payload, addr);
         let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, Some(seq_id));
