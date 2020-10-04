@@ -1,4 +1,4 @@
-use rust_tuyapi::mesparse::{CommandType, Message, TuyaDevice};
+use rust_tuyapi::mesparse::{CommandType, Message, MessageParser};
 
 #[test]
 fn encode_and_decode_message() {
@@ -6,7 +6,7 @@ fn encode_and_decode_message() {
         .as_bytes()
         .to_owned();
 
-    let parser = TuyaDevice::create("3.1", None, None).unwrap();
+    let parser = MessageParser::create("3.1", None).unwrap();
     let message_to_encode = Message::new(&payload, CommandType::DpQuery, Some(2));
     let encoded = parser.encode(&message_to_encode, false).unwrap();
 
@@ -21,7 +21,7 @@ fn encode_and_decode_get_message_version_three_three() {
         .as_bytes()
         .to_owned();
 
-    let parser = TuyaDevice::create("3.3", Some("bbe88b3f4106d354"), None).unwrap();
+    let parser = MessageParser::create("3.3", Some("bbe88b3f4106d354"), None).unwrap();
     let message_to_encode = Message::new(&payload, CommandType::DpQuery, Some(2));
     let encoded = parser.encode(&message_to_encode, false).unwrap();
 
@@ -36,7 +36,7 @@ fn encode_and_decode_set_message_version_three_three() {
         .as_bytes()
         .to_owned();
 
-    let parser = TuyaDevice::create("3.3", Some("bbe88b3f4106d354"), None).unwrap();
+    let parser = MessageParser::create("3.3", Some("bbe88b3f4106d354"), None).unwrap();
     let message_to_encode = Message::new(&payload, CommandType::Control, Some(0));
     let encoded = parser.encode(&message_to_encode, false).unwrap();
 
@@ -49,7 +49,7 @@ fn encode_and_decode_set_message_version_three_three() {
 fn decode_empty_message() {
     let payload = b"".to_owned();
 
-    let parser = TuyaDevice::create("3.1", None, None).unwrap();
+    let parser = MessageParser::create("3.1", None).unwrap();
     let message_to_encode = Message::new(&payload, CommandType::DpQuery, Some(0));
     let encoded = parser.encode(&message_to_encode, false).unwrap();
 
@@ -64,7 +64,7 @@ fn decode_corrupt_shortened_message() {
         .as_bytes()
         .to_owned();
 
-    let parser = TuyaDevice::create("3.1", None, None).unwrap();
+    let parser = MessageParser::create("3.1", None).unwrap();
     let message_to_encode = Message::new(&payload, CommandType::DpQuery, None);
     let encoded = parser.encode(&message_to_encode, false).unwrap();
 
@@ -77,7 +77,7 @@ fn decode_corrupt_shorter_than_possible_message() {
         .as_bytes()
         .to_owned();
 
-    let parser = TuyaDevice::create("3.1", None, None).unwrap();
+    let parser = MessageParser::create("3.1", None).unwrap();
     let message_to_encode = Message::new(&payload, CommandType::DpQuery, None);
     let encoded = parser.encode(&message_to_encode, false).unwrap();
 
@@ -90,7 +90,7 @@ fn decode_corrupt_crc_mismatch_message() {
         .as_bytes()
         .to_owned();
 
-    let parser = TuyaDevice::create("3.1", None, None).unwrap();
+    let parser = MessageParser::create("3.1", None).unwrap();
     let message_to_encode = Message::new(&payload, CommandType::DpQuery, None);
     let encoded = parser.encode(&message_to_encode, false).unwrap();
     // mess up the crc code
