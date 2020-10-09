@@ -116,7 +116,7 @@ impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Payload: \"{}\", Control {:?}, Seq Nr: {}, Return Code: {}",
+            "Payload: \"{}\", Command: {:?}, Seq Nr: {}, Return Code: {}",
             std::str::from_utf8(&self.payload).expect("Payload: Not parseable UTF-8"),
             self.command.clone().unwrap_or(CommandType::Error),
             self.seq_nr.unwrap_or(0),

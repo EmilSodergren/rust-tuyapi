@@ -2,6 +2,7 @@ mod cipher;
 mod crc;
 mod error;
 pub mod mesparse;
+pub mod tuyadevice;
 
 extern crate num;
 extern crate num_derive;
@@ -11,6 +12,7 @@ extern crate lazy_static;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
+use crate::mesparse::Result;
 use std::collections::HashMap;
 
 pub enum TuyaType {
@@ -25,6 +27,13 @@ pub struct Payload {
     uid: String,
     t: u32,
     dps: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[allow(non_snake_case)]
+pub struct GetPayload {
+    devId: String,
+    gwId: String,
 }
 
 // Convenience method to create a valid Tuya style payload from a device ID and a state received
@@ -45,7 +54,7 @@ pub struct Payload {
 //   }
 // }
 //
-pub fn payload(device_id: &str, tt: TuyaType, state: &str) -> mesparse::Result<String> {
+pub fn payload(device_id: &str, tt: TuyaType, state: &str) -> Result<String> {
     serde_json::to_string(&Payload {
         devId: device_id.to_string(),
         gwId: device_id.to_string(),
@@ -55,6 +64,14 @@ pub fn payload(device_id: &str, tt: TuyaType, state: &str) -> mesparse::Result<S
             .map_err(error::ErrorKind::SystemTimeError)?
             .as_secs() as u32,
         dps: dps(tt, state),
+    })
+    .map_err(error::ErrorKind::JsonError)
+}
+
+pub fn get_payload(device_id: &str) -> Result<String> {
+    serde_json::to_string(&GetPayload {
+        devId: device_id.to_string(),
+        gwId: device_id.to_string(),
     })
     .map_err(error::ErrorKind::JsonError)
 }

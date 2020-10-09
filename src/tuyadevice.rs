@@ -1,4 +1,7 @@
-use crate::mesparse::MessageParser;
+use crate::error::ErrorKind;
+use crate::mesparse::{CommandType, Message, MessageParser, Result};
+use log::{debug, info};
+use std::io::prelude::*;
 use std::net::{Shutdown, SocketAddr, TcpStream};
 
 pub struct TuyaDevice {
@@ -7,9 +10,9 @@ pub struct TuyaDevice {
 }
 
 impl TuyaDevice {
-    pub fn create(ver: &str, key: Option<&str>, addr: SocketAddr) -> Result<MessageParser> {
+    pub fn create(ver: &str, key: Option<&str>, addr: SocketAddr) -> Result<TuyaDevice> {
         let mp = MessageParser::create(ver, key)?;
-        create_with_mp(mp, addr)
+        Ok(TuyaDevice::create_with_mp(mp, addr))
     }
 
     pub fn create_with_mp(mp: MessageParser, addr: SocketAddr) -> TuyaDevice {
@@ -17,20 +20,16 @@ impl TuyaDevice {
     }
 
     pub fn set(&self, tuya_payload: &str, seq_id: u32) -> Result<()> {
-        let addr = match self.addr {
-            Some(addr) => addr,
-            None => return Err(ErrorKind::ParsingIncomplete),
-        };
-        let mut tcpstream = TcpStream::connect(addr).map_err(ErrorKind::TcpError)?;
+        let mut tcpstream = TcpStream::connect(&self.addr).map_err(ErrorKind::TcpError)?;
         tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
-        info!("Connected to the device on ip {}", addr);
+        info!("Connected to the device on ip {}", self.addr);
         info!(
             "Writing message to {} ({}):\n{}",
-            addr, seq_id, &tuya_payload
+            self.addr, seq_id, &tuya_payload
         );
         let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, Some(seq_id));
         let bts = tcpstream
-            .write(&self.encode(&mes, true)?)
+            .write(&self.mp.encode(&mes, true)?)
             .map_err(ErrorKind::TcpError)?;
         info!("Wrote {} bytes.", bts);
         let mut buf = [0; 256];
@@ -43,8 +42,10 @@ impl TuyaDevice {
                 hex::encode(&buf[..bts])
             );
             // TODO: Can receive more than one message
-            let message = self.parse(&buf[..bts])?;
-            info!("Decoded message ({}):\n{}", seq_id, &message[0]);
+            let messages = self.mp.parse(&buf[..bts])?;
+            messages
+                .iter()
+                .for_each(|mes| info!("Decoded message ({}):\n{}", seq_id, mes));
         }
 
         debug!("shutting down connection");
@@ -52,5 +53,34 @@ impl TuyaDevice {
             .shutdown(Shutdown::Both)
             .map_err(ErrorKind::TcpError)?;
         Ok(())
+    }
+
+    pub fn get(&self, tuya_payload: &str, seq_id: u32) -> Result<Vec<Message>> {
+        let mut tcpstream = TcpStream::connect(&self.addr).map_err(ErrorKind::TcpError)?;
+        tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
+        info!("Connected to the device on ip {}", &self.addr);
+        info!("Getting status from {} ({})", &self.addr, seq_id);
+        let mes = Message::new(tuya_payload.as_bytes(), CommandType::DpQuery, Some(seq_id));
+        let bts = tcpstream
+            .write(&self.mp.encode(&mes, true)?)
+            .map_err(ErrorKind::TcpError)?;
+        info!("Wrote {} bytes.", bts);
+        let mut buf = [0; 256];
+        let bts = tcpstream.read(&mut buf).map_err(ErrorKind::TcpError)?;
+        info!("Received {} bytes", bts);
+        debug!(
+            "Received message ({}):\n{}",
+            seq_id,
+            hex::encode(&buf[..bts])
+        );
+        // TODO: Can receive more than one message
+        let message = self.mp.parse(&buf[..bts])?;
+        info!("Decoded message ({}):\n{}", seq_id, &message[0]);
+
+        debug!("shutting down connection");
+        tcpstream
+            .shutdown(Shutdown::Both)
+            .map_err(ErrorKind::TcpError)?;
+        Ok(message)
     }
 }
