@@ -258,7 +258,7 @@ impl MessageParser {
         Ok((buf, messages))
     }
 
-    fn try_decrypt<'a>(&self, payload: &'a [u8]) -> Vec<u8> {
+    fn try_decrypt(&self, payload: &[u8]) -> Vec<u8> {
         match self.cipher.decrypt(payload) {
             Ok(decrypted) => decrypted,
             Err(_) => payload.to_vec(),
