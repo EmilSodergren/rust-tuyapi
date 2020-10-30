@@ -20,6 +20,7 @@ impl TuyaDevice {
     }
 
     pub fn set(&self, tuya_payload: &str, seq_id: u32) -> Result<()> {
+        let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, Some(seq_id));
         let mut tcpstream = TcpStream::connect(&self.addr).map_err(ErrorKind::TcpError)?;
         tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
         info!("Connected to the device on ip {}", self.addr);
@@ -27,10 +28,7 @@ impl TuyaDevice {
             "Writing message to {} ({}):\n{}",
             self.addr, seq_id, &tuya_payload
         );
-        let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, Some(seq_id));
-        let bts = tcpstream
-            .write(&self.mp.encode(&mes, true)?)
-            .map_err(ErrorKind::TcpError)?;
+        let bts = self.send_with_retry(&mut tcpstream, &mes)?;
         info!("Wrote {} bytes.", bts);
         let mut buf = [0; 256];
         let bts = tcpstream.read(&mut buf).map_err(ErrorKind::TcpError)?;
@@ -56,14 +54,12 @@ impl TuyaDevice {
     }
 
     pub fn get(&self, tuya_payload: &str, seq_id: u32) -> Result<Vec<Message>> {
+        let mes = Message::new(tuya_payload.as_bytes(), CommandType::DpQuery, Some(seq_id));
         let mut tcpstream = TcpStream::connect(&self.addr).map_err(ErrorKind::TcpError)?;
         tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
         info!("Connected to the device on ip {}", &self.addr);
         info!("Getting status from {} ({})", &self.addr, seq_id);
-        let mes = Message::new(tuya_payload.as_bytes(), CommandType::DpQuery, Some(seq_id));
-        let bts = tcpstream
-            .write(&self.mp.encode(&mes, true)?)
-            .map_err(ErrorKind::TcpError)?;
+        let bts = self.send_with_retry(&mut tcpstream, &mes)?;
         info!("Wrote {} bytes.", bts);
         let mut buf = [0; 256];
         let bts = tcpstream.read(&mut buf).map_err(ErrorKind::TcpError)?;
@@ -82,5 +78,20 @@ impl TuyaDevice {
             .shutdown(Shutdown::Both)
             .map_err(ErrorKind::TcpError)?;
         Ok(message)
+    }
+
+    fn send_with_retry(&self, tcpstream: &mut TcpStream, mes: &Message) -> Result<usize> {
+        use std::thread::sleep;
+        use std::time::Duration;
+        match tcpstream.write(self.mp.encode(mes, true)?.as_ref()) {
+            Ok(bts) => Ok(bts),
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::ConnectionReset => {
+                    sleep(Duration::from_secs(1));
+                    self.send_with_retry(tcpstream, mes)
+                }
+                _ => Err(e).map_err(ErrorKind::TcpError),
+            },
+        }
     }
 }
