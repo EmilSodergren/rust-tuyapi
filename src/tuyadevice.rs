@@ -87,6 +87,7 @@ impl TuyaDevice {
             Ok(bts) => Ok(bts),
             Err(e) => match e.kind() {
                 std::io::ErrorKind::ConnectionReset => {
+                    debug!("Got Connection Reset from device, retry in 1 second");
                     sleep(Duration::from_secs(1));
                     self.send_with_retry(tcpstream, mes)
                 }
