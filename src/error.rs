@@ -33,6 +33,8 @@ pub enum ErrorKind {
     SystemTimeError(std::time::SystemTimeError),
     #[error("Could not write to TcpStream. Error: {0}")]
     TcpError(io::Error),
+    #[error("Could not write to TcpStream. Error: {0}")]
+    TcpTimedOutError(io::Error),
     #[error("The given version {0}.{1} is not valid")]
     VersionError(String, String),
 }

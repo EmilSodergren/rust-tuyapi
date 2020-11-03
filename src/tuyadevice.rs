@@ -3,6 +3,7 @@ use crate::mesparse::{CommandType, Message, MessageParser, Result};
 use log::{debug, info};
 use std::io::prelude::*;
 use std::net::{Shutdown, SocketAddr, TcpStream};
+use std::time::Duration;
 
 pub struct TuyaDevice {
     mp: MessageParser,
@@ -23,6 +24,12 @@ impl TuyaDevice {
         let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, Some(seq_id));
         let mut tcpstream = TcpStream::connect(&self.addr).map_err(ErrorKind::TcpError)?;
         tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
+        tcpstream
+            .set_read_timeout(Some(Duration::new(3, 0)))
+            .map_err(ErrorKind::TcpError)?;
+        tcpstream
+            .set_read_timeout(Some(Duration::new(3, 0)))
+            .map_err(ErrorKind::TcpError)?;
         info!("Connected to the device on ip {}", self.addr);
         info!(
             "Writing message to {} ({}):\n{}",
@@ -57,6 +64,12 @@ impl TuyaDevice {
         let mes = Message::new(tuya_payload.as_bytes(), CommandType::DpQuery, Some(seq_id));
         let mut tcpstream = TcpStream::connect(&self.addr).map_err(ErrorKind::TcpError)?;
         tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
+        tcpstream
+            .set_read_timeout(Some(Duration::new(3, 0)))
+            .map_err(ErrorKind::TcpError)?;
+        tcpstream
+            .set_read_timeout(Some(Duration::new(3, 0)))
+            .map_err(ErrorKind::TcpError)?;
         info!("Connected to the device on ip {}", &self.addr);
         info!("Getting status from {} ({})", &self.addr, seq_id);
         let bts = self.send_with_retry(&mut tcpstream, &mes)?;
@@ -82,7 +95,6 @@ impl TuyaDevice {
 
     fn send_with_retry(&self, tcpstream: &mut TcpStream, mes: &Message) -> Result<usize> {
         use std::thread::sleep;
-        use std::time::Duration;
         match tcpstream.write(self.mp.encode(mes, true)?.as_ref()) {
             Ok(bts) => Ok(bts),
             Err(e) => match e.kind() {
@@ -91,6 +103,7 @@ impl TuyaDevice {
                     sleep(Duration::from_secs(1));
                     self.send_with_retry(tcpstream, mes)
                 }
+                std::io::ErrorKind::TimedOut => Err(e).map_err(ErrorKind::TcpTimedOutError),
                 _ => Err(e).map_err(ErrorKind::TcpError),
             },
         }
