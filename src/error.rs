@@ -31,6 +31,8 @@ pub enum ErrorKind {
     ParsingIncomplete,
     #[error("{0}")]
     SystemTimeError(std::time::SystemTimeError),
+    #[error("Bad read from TcpStream.")]
+    BadTcpRead,
     #[error("Could not write to TcpStream. Error: {0}")]
     TcpError(io::Error),
     #[error("Could not write to TcpStream. Error: {0}")]

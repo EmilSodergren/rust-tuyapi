@@ -1,6 +1,6 @@
 mod cipher;
 mod crc;
-mod error;
+pub mod error;
 pub mod mesparse;
 pub mod tuyadevice;
 

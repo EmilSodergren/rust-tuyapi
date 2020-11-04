@@ -25,12 +25,11 @@ impl TuyaDevice {
         let mut tcpstream = TcpStream::connect(&self.addr).map_err(ErrorKind::TcpError)?;
         tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
         tcpstream
-            .set_read_timeout(Some(Duration::new(3, 0)))
+            .set_read_timeout(Some(Duration::new(2, 0)))
             .map_err(ErrorKind::TcpError)?;
         tcpstream
-            .set_read_timeout(Some(Duration::new(3, 0)))
+            .set_read_timeout(Some(Duration::new(2, 0)))
             .map_err(ErrorKind::TcpError)?;
-        info!("Connected to the device on ip {}", self.addr);
         info!(
             "Writing message to {} ({}):\n{}",
             self.addr, seq_id, &tuya_payload
@@ -40,7 +39,9 @@ impl TuyaDevice {
         let mut buf = [0; 256];
         let bts = tcpstream.read(&mut buf).map_err(ErrorKind::TcpError)?;
         info!("Received {} bytes", bts);
-        if bts > 0 {
+        if bts == 0 {
+            return Err(ErrorKind::BadTcpRead);
+        } else {
             debug!(
                 "Received message ({}):\n{}",
                 seq_id,
@@ -53,7 +54,7 @@ impl TuyaDevice {
                 .for_each(|mes| info!("Decoded message ({}):\n{}", seq_id, mes));
         }
 
-        debug!("shutting down connection");
+        debug!("Shutting down connection ({})", seq_id);
         tcpstream
             .shutdown(Shutdown::Both)
             .map_err(ErrorKind::TcpError)?;
