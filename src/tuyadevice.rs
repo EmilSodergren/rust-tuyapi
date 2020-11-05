@@ -2,7 +2,7 @@ use crate::error::ErrorKind;
 use crate::mesparse::{CommandType, Message, MessageParser, Result};
 use log::{debug, info};
 use std::io::prelude::*;
-use std::net::{Shutdown, SocketAddr, TcpStream};
+use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream};
 use std::time::Duration;
 
 pub struct TuyaDevice {
@@ -11,13 +11,16 @@ pub struct TuyaDevice {
 }
 
 impl TuyaDevice {
-    pub fn create(ver: &str, key: Option<&str>, addr: SocketAddr) -> Result<TuyaDevice> {
+    pub fn create(ver: &str, key: Option<&str>, addr: IpAddr) -> Result<TuyaDevice> {
         let mp = MessageParser::create(ver, key)?;
         Ok(TuyaDevice::create_with_mp(mp, addr))
     }
 
-    pub fn create_with_mp(mp: MessageParser, addr: SocketAddr) -> TuyaDevice {
-        TuyaDevice { mp, addr }
+    pub fn create_with_mp(mp: MessageParser, addr: IpAddr) -> TuyaDevice {
+        TuyaDevice {
+            mp,
+            addr: SocketAddr::new(addr, 6668),
+        }
     }
 
     pub fn set(&self, tuya_payload: &str, seq_id: u32) -> Result<()> {
