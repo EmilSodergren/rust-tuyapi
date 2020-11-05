@@ -34,7 +34,9 @@ impl TuyaDevice {
             "Writing message to {} ({}):\n{}",
             self.addr, seq_id, &tuya_payload
         );
-        let bts = self.send_with_retry(&mut tcpstream, &mes)?;
+        let bts = tcpstream
+            .write(self.mp.encode(&mes, true)?.as_ref())
+            .map_err(ErrorKind::TcpError)?;
         info!("Wrote {} bytes.", bts);
         let mut buf = [0; 256];
         let bts = tcpstream.read(&mut buf).map_err(ErrorKind::TcpError)?;
@@ -73,7 +75,9 @@ impl TuyaDevice {
             .map_err(ErrorKind::TcpError)?;
         info!("Connected to the device on ip {}", &self.addr);
         info!("Getting status from {} ({})", &self.addr, seq_id);
-        let bts = self.send_with_retry(&mut tcpstream, &mes)?;
+        let bts = tcpstream
+            .write(self.mp.encode(&mes, true)?.as_ref())
+            .map_err(ErrorKind::TcpError)?;
         info!("Wrote {} bytes.", bts);
         let mut buf = [0; 256];
         let bts = tcpstream.read(&mut buf).map_err(ErrorKind::TcpError)?;
@@ -92,21 +96,5 @@ impl TuyaDevice {
             .shutdown(Shutdown::Both)
             .map_err(ErrorKind::TcpError)?;
         Ok(message)
-    }
-
-    fn send_with_retry(&self, tcpstream: &mut TcpStream, mes: &Message) -> Result<usize> {
-        use std::thread::sleep;
-        match tcpstream.write(self.mp.encode(mes, true)?.as_ref()) {
-            Ok(bts) => Ok(bts),
-            Err(e) => match e.kind() {
-                std::io::ErrorKind::ConnectionReset => {
-                    debug!("Got Connection Reset from device, retry in 1 second");
-                    sleep(Duration::from_secs(1));
-                    self.send_with_retry(tcpstream, mes)
-                }
-                std::io::ErrorKind::TimedOut => Err(e).map_err(ErrorKind::TcpTimedOutError),
-                _ => Err(e).map_err(ErrorKind::TcpError),
-            },
-        }
     }
 }
