@@ -40,23 +40,22 @@ impl TuyaDevice {
         let bts = tcpstream
             .write(self.mp.encode(&mes, true)?.as_ref())
             .map_err(ErrorKind::TcpError)?;
-        info!("Wrote {} bytes.", bts);
+        info!("Wrote {} bytes ({})", bts, seq_id);
         let mut buf = [0; 256];
         let bts = tcpstream.read(&mut buf).map_err(ErrorKind::TcpError)?;
-        info!("Received {} bytes", bts);
+        info!("Received {} bytes ({})", bts, seq_id);
         if bts == 0 {
             return Err(ErrorKind::BadTcpRead);
         } else {
             debug!(
-                "Received message ({}):\n{}",
+                "Received response ({}):\n{}",
                 seq_id,
                 hex::encode(&buf[..bts])
             );
-            // TODO: Can receive more than one message
             let messages = self.mp.parse(&buf[..bts])?;
             messages
                 .iter()
-                .for_each(|mes| info!("Decoded message ({}):\n{}", seq_id, mes));
+                .for_each(|mes| info!("Decoded response ({}):\n{}", seq_id, mes));
         }
 
         debug!("Shutting down connection ({})", seq_id);
