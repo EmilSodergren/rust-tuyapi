@@ -25,6 +25,23 @@ impl TuyaDevice {
 
     pub fn set(&self, tuya_payload: &str, seq_id: u32) -> Result<()> {
         let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, Some(seq_id));
+        let replies = self.send(&mes, tuya_payload, seq_id)?;
+        replies
+            .iter()
+            .for_each(|mes| info!("Decoded response ({}):\n{}", seq_id, mes));
+        Ok(())
+    }
+
+    pub fn get(&self, tuya_payload: &str, seq_id: u32) -> Result<Vec<Message>> {
+        let mes = Message::new(tuya_payload.as_bytes(), CommandType::DpQuery, Some(seq_id));
+        let replies = self.send(&mes, tuya_payload, seq_id)?;
+        replies
+            .iter()
+            .for_each(|mes| info!("Decoded response ({}):\n{}", seq_id, mes));
+        Ok(replies)
+    }
+
+    fn send(&self, mes: &Message, payload: &str, seq_id: u32) -> Result<Vec<Message>> {
         let mut tcpstream = TcpStream::connect(&self.addr).map_err(ErrorKind::TcpError)?;
         tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
         tcpstream
@@ -35,7 +52,7 @@ impl TuyaDevice {
             .map_err(ErrorKind::TcpError)?;
         info!(
             "Writing message to {} ({}):\n{}",
-            self.addr, seq_id, &tuya_payload
+            self.addr, seq_id, &payload
         );
         let bts = tcpstream
             .write(self.mp.encode(&mes, true)?.as_ref())
@@ -52,51 +69,11 @@ impl TuyaDevice {
                 seq_id,
                 hex::encode(&buf[..bts])
             );
-            let messages = self.mp.parse(&buf[..bts])?;
-            messages
-                .iter()
-                .for_each(|mes| info!("Decoded response ({}):\n{}", seq_id, mes));
         }
-
         debug!("Shutting down connection ({})", seq_id);
         tcpstream
             .shutdown(Shutdown::Both)
             .map_err(ErrorKind::TcpError)?;
-        Ok(())
-    }
-
-    pub fn get(&self, tuya_payload: &str, seq_id: u32) -> Result<Vec<Message>> {
-        let mes = Message::new(tuya_payload.as_bytes(), CommandType::DpQuery, Some(seq_id));
-        let mut tcpstream = TcpStream::connect(&self.addr).map_err(ErrorKind::TcpError)?;
-        tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
-        tcpstream
-            .set_read_timeout(Some(Duration::new(3, 0)))
-            .map_err(ErrorKind::TcpError)?;
-        tcpstream
-            .set_read_timeout(Some(Duration::new(3, 0)))
-            .map_err(ErrorKind::TcpError)?;
-        info!("Connected to the device on ip {}", &self.addr);
-        info!("Getting status from {} ({})", &self.addr, seq_id);
-        let bts = tcpstream
-            .write(self.mp.encode(&mes, true)?.as_ref())
-            .map_err(ErrorKind::TcpError)?;
-        info!("Wrote {} bytes.", bts);
-        let mut buf = [0; 256];
-        let bts = tcpstream.read(&mut buf).map_err(ErrorKind::TcpError)?;
-        info!("Received {} bytes", bts);
-        debug!(
-            "Received message ({}):\n{}",
-            seq_id,
-            hex::encode(&buf[..bts])
-        );
-        // TODO: Can receive more than one message
-        let message = self.mp.parse(&buf[..bts])?;
-        info!("Decoded message ({}):\n{}", seq_id, &message[0]);
-
-        debug!("shutting down connection");
-        tcpstream
-            .shutdown(Shutdown::Both)
-            .map_err(ErrorKind::TcpError)?;
-        Ok(message)
+        self.mp.parse(&buf[..bts])
     }
 }
