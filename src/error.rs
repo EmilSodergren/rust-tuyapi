@@ -7,7 +7,7 @@ use thiserror::Error;
 pub enum ErrorKind {
     #[error("String failed to decode as base64, error was: {0}")]
     Base64DecodeError(DecodeError),
-    #[error("Something went wrong when parsing the received buffer. It still contains data after parsing is done.")]
+    #[error("Something went wrong when parsing the received buffer. It still contains data after parsing is done")]
     BufferNotCompletelyParsedError,
     #[error("Can not encode messages that are missing CommandType")]
     CanNotEncodeMessageWithoutCommand,
@@ -23,7 +23,7 @@ pub enum ErrorKind {
     JsonError(serde_json::error::Error),
     #[error("The key length is {0}, should be 16")]
     KeyLength(usize),
-    #[error("the tuyadevice is not created with a socket address. can not set object.")]
+    #[error("the tuyadevice is not created with a socket address. can not set object")]
     MissingAddressError,
     #[error("parsing failed with: {0:?}")]
     ParseError(nom::error::ErrorKind),
@@ -31,7 +31,7 @@ pub enum ErrorKind {
     ParsingIncomplete,
     #[error("{0}")]
     SystemTimeError(std::time::SystemTimeError),
-    #[error("Bad read from TcpStream.")]
+    #[error("Bad read from TcpStream")]
     BadTcpRead,
     #[error("Could not write to TcpStream. Error: {0}")]
     TcpError(io::Error),
