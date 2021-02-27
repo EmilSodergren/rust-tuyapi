@@ -1,5 +1,5 @@
 # rust-tuyapi
-[![Build Status](https://travis-ci.com/EmilSodergren/rust-tuyapi.svg?branch=master)](https://travis-ci.com/EmilSodergren/rust-tuyapi)
+[![Build Status](https://github.com/EmilSodergren/rust-tuyapi/actions/workflows/mean_bean_ci.yml/badge.svg)](https://github.com/EmilSodergren/rust-tuyapi/actions/workflows/mean_bean_ci.yml)
 
 Rust implementation of the Tuya API used to communicate with Tuya/Smart Life devices.
 
