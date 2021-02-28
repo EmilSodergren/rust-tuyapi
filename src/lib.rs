@@ -60,8 +60,7 @@ pub fn payload(device_id: &str, tt: TuyaType, state: &str) -> Result<String> {
         gwId: device_id.to_string(),
         uid: "".to_string(),
         t: SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(error::ErrorKind::SystemTimeError)?
+            .duration_since(SystemTime::UNIX_EPOCH)?
             .as_secs() as u32,
         dps: dps(tt, state),
     })

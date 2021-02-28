@@ -42,24 +42,18 @@ impl TuyaDevice {
     }
 
     fn send(&self, mes: &Message, payload: &str, seq_id: u32) -> Result<Vec<Message>> {
-        let mut tcpstream = TcpStream::connect(&self.addr).map_err(ErrorKind::TcpError)?;
-        tcpstream.set_nodelay(true).map_err(ErrorKind::TcpError)?;
-        tcpstream
-            .set_read_timeout(Some(Duration::new(2, 0)))
-            .map_err(ErrorKind::TcpError)?;
-        tcpstream
-            .set_read_timeout(Some(Duration::new(2, 0)))
-            .map_err(ErrorKind::TcpError)?;
+        let mut tcpstream = TcpStream::connect(&self.addr)?;
+        tcpstream.set_nodelay(true)?;
+        tcpstream.set_read_timeout(Some(Duration::new(2, 0)))?;
+        tcpstream.set_read_timeout(Some(Duration::new(2, 0)))?;
         info!(
             "Writing message to {} ({}):\n{}",
             self.addr, seq_id, &payload
         );
-        let bts = tcpstream
-            .write(self.mp.encode(&mes, true)?.as_ref())
-            .map_err(ErrorKind::TcpError)?;
+        let bts = tcpstream.write(self.mp.encode(&mes, true)?.as_ref())?;
         info!("Wrote {} bytes ({})", bts, seq_id);
         let mut buf = [0; 256];
-        let bts = tcpstream.read(&mut buf).map_err(ErrorKind::TcpError)?;
+        let bts = tcpstream.read(&mut buf)?;
         info!("Received {} bytes ({})", bts, seq_id);
         if bts == 0 {
             return Err(ErrorKind::BadTcpRead);
@@ -71,9 +65,7 @@ impl TuyaDevice {
             );
         }
         debug!("Shutting down connection ({})", seq_id);
-        tcpstream
-            .shutdown(Shutdown::Both)
-            .map_err(ErrorKind::TcpError)?;
+        tcpstream.shutdown(Shutdown::Both)?;
         self.mp.parse(&buf[..bts])
     }
 }

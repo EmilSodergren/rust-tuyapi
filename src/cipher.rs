@@ -1,4 +1,3 @@
-use crate::error::ErrorKind;
 use crate::mesparse::{Result, TuyaVersion};
 use openssl::symm::{decrypt, encrypt, Cipher};
 
@@ -29,8 +28,7 @@ impl TuyaCipher {
     }
 
     pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let res =
-            encrypt(self.cipher, &self.key, None, data).map_err(ErrorKind::EncryptionError)?;
+        let res = encrypt(self.cipher, &self.key, None, data)?;
         match self.version {
             TuyaVersion::ThreeOne => Ok(base64::encode(res).as_bytes().to_vec()),
             TuyaVersion::ThreeThree => Ok(res),
@@ -42,11 +40,10 @@ impl TuyaCipher {
         let data = maybe_strip_header(&self.version, &data);
         // 3.1 is base64 encoded, 3.3 is not
         let data = match self.version {
-            TuyaVersion::ThreeOne => base64::decode(&data).map_err(ErrorKind::Base64DecodeError)?,
+            TuyaVersion::ThreeOne => base64::decode(&data)?,
             TuyaVersion::ThreeThree => data.to_vec(),
         };
-        let res =
-            decrypt(self.cipher, &self.key, None, &data).map_err(ErrorKind::DecryptionError)?;
+        let res = decrypt(self.cipher, &self.key, None, &data)?;
 
         Ok(res.to_vec())
     }
