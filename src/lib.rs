@@ -33,9 +33,12 @@ enum Payload {
 #[allow(non_snake_case)]
 pub struct PayloadStruct {
     devId: String,
-    gwId: String,
-    uid: String,
-    t: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    gwId: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    uid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    t: Option<u32>,
     dps: HashMap<String, serde_json::Value>,
 }
 
@@ -66,7 +69,10 @@ impl Scramble for PayloadStruct {
     fn scramble(&self) -> PayloadStruct {
         PayloadStruct {
             devId: String::from("...") + Self::scramble_str(&self.devId),
-            gwId: String::from("...") + Self::scramble_str(&self.gwId),
+            gwId: self
+                .gwId
+                .as_ref()
+                .map(|gwid| String::from("...") + Self::scramble_str(gwid)),
             t: self.t,
             uid: self.uid.clone(),
             dps: self.dps.clone(),
@@ -113,11 +119,13 @@ pub struct GetPayload {
 pub fn payload(device_id: &str, tt: TuyaType, state: &str) -> Result<String> {
     serde_json::to_string(&PayloadStruct {
         devId: device_id.to_string(),
-        gwId: device_id.to_string(),
-        uid: "".to_string(),
-        t: SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)?
-            .as_secs() as u32,
+        gwId: Some(device_id.to_string()),
+        uid: None,
+        t: Some(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)?
+                .as_secs() as u32,
+        ),
         dps: dps(tt, state),
     })
     .map_err(error::ErrorKind::JsonError)

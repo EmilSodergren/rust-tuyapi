@@ -28,7 +28,6 @@ lazy_static! {
 }
 
 /// Human readable definitions of command bytes.
-#[allow(dead_code)]
 #[derive(Debug, FromPrimitive, ToPrimitive, Clone, PartialEq)]
 pub enum CommandType {
     Udp = 0,
