@@ -10,6 +10,7 @@ extern crate num_derive;
 extern crate lazy_static;
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::time::SystemTime;
 
 use crate::mesparse::Result;
@@ -18,23 +19,51 @@ use std::convert::TryFrom;
 use std::fmt::Display;
 
 use crate::error::ErrorKind;
+use std::convert::TryInto;
 
 pub enum TuyaType {
     Socket,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum Payload {
+pub enum Payload {
     Struct(PayloadStruct),
     String(String),
 }
 
+impl Payload {
+    pub fn new(
+        dev_id: String,
+        gw_id: Option<String>,
+        uid: Option<String>,
+        t: Option<u32>,
+        dps: HashMap<String, serde_json::Value>,
+    ) -> Payload {
+        Payload::Struct(PayloadStruct {
+            dev_id,
+            gw_id,
+            uid,
+            t,
+            dps,
+        })
+    }
+}
+
+impl Display for Payload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Payload::Struct(s) => write!(f, "{}", s),
+            Payload::String(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-#[allow(non_snake_case)]
 pub struct PayloadStruct {
-    devId: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    gwId: Option<String>,
+    #[serde(rename = "devId")]
+    dev_id: String,
+    #[serde(rename = "gwId", skip_serializing_if = "Option::is_none")]
+    gw_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     uid: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,19 +87,29 @@ impl TryFrom<Vec<u8>> for Payload {
     type Error = ErrorKind;
 
     fn try_from(vec: Vec<u8>) -> Result<Self> {
-        Ok(match serde_json::from_slice(&vec)? {
-            serde_json::Value::String(s) => Payload::String(s),
-            value => Payload::Struct(serde_json::from_value(value)?),
-        })
+        match serde_json::from_slice(&vec)? {
+            serde_json::Value::String(s) => Ok(Payload::String(s)),
+            value => Ok(Payload::Struct(serde_json::from_value(value)?)),
+        }
+    }
+}
+impl TryInto<Vec<u8>> for Payload {
+    type Error = ErrorKind;
+
+    fn try_into(self) -> Result<Vec<u8>> {
+        match self {
+            Payload::Struct(s) => Ok(serde_json::to_vec(&s)?),
+            Payload::String(s) => Ok(s.as_bytes().to_vec()),
+        }
     }
 }
 
 impl Scramble for PayloadStruct {
     fn scramble(&self) -> PayloadStruct {
         PayloadStruct {
-            devId: String::from("...") + Self::scramble_str(&self.devId),
-            gwId: self
-                .gwId
+            dev_id: String::from("...") + Self::scramble_str(&self.dev_id),
+            gw_id: self
+                .gw_id
                 .as_ref()
                 .map(|gwid| String::from("...") + Self::scramble_str(gwid)),
             t: self.t,
@@ -92,10 +131,9 @@ impl Display for PayloadStruct {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[allow(non_snake_case)]
 pub struct GetPayload {
-    devId: String,
-    gwId: String,
+    dev_id: String,
+    gw_id: String,
 }
 
 // Convenience method to create a valid Tuya style payload from a device ID and a state received
@@ -107,8 +145,8 @@ pub struct GetPayload {
 // will render:
 //
 // {
-//   devId: abcde,
-//   gwId: abcde,
+//   dev_id: abcde,
+//   gw_id: abcde,
 //   uid: "",
 //   t: 132478194, <-- current time
 //   dps: {
@@ -116,25 +154,25 @@ pub struct GetPayload {
 //   }
 // }
 //
-pub fn payload(device_id: &str, tt: TuyaType, state: &str) -> Result<String> {
-    serde_json::to_string(&PayloadStruct {
-        devId: device_id.to_string(),
-        gwId: Some(device_id.to_string()),
+pub fn payload(device_id: &str, tt: TuyaType, state: &str) -> Payload {
+    Payload::Struct(PayloadStruct {
+        dev_id: device_id.to_string(),
+        gw_id: Some(device_id.to_string()),
         uid: None,
         t: Some(
             SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)?
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
                 .as_secs() as u32,
         ),
         dps: dps(tt, state),
     })
-    .map_err(error::ErrorKind::JsonError)
 }
 
 pub fn get_payload(device_id: &str) -> Result<String> {
     serde_json::to_string(&GetPayload {
-        devId: device_id.to_string(),
-        gwId: device_id.to_string(),
+        dev_id: device_id.to_string(),
+        gw_id: device_id.to_string(),
     })
     .map_err(error::ErrorKind::JsonError)
 }
@@ -148,9 +186,9 @@ fn dps(tt: TuyaType, state: &str) -> HashMap<String, serde_json::Value> {
 fn socket_dps(state: &str) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
     if state.eq_ignore_ascii_case("on") || state.eq_ignore_ascii_case("1") {
-        map.insert("1".to_string(), serde_json::to_value(true).unwrap());
+        map.insert("1".to_string(), json!(true));
     } else {
-        map.insert("1".to_string(), serde_json::to_value(false).unwrap());
+        map.insert("1".to_string(), json!(false));
     }
     map
 }

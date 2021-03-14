@@ -1,5 +1,6 @@
 use crate::error::ErrorKind;
 use crate::mesparse::{CommandType, Message, MessageParser, Result};
+use crate::Payload;
 use log::{debug, info};
 use std::io::prelude::*;
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream};
@@ -23,33 +24,30 @@ impl TuyaDevice {
         }
     }
 
-    pub fn set(&self, tuya_payload: &str, seq_id: u32) -> Result<()> {
-        let mes = Message::new(tuya_payload.as_bytes(), CommandType::Control, Some(seq_id));
-        let replies = self.send(&mes, tuya_payload, seq_id)?;
+    pub fn set(&self, tuya_payload: Payload, seq_id: u32) -> Result<()> {
+        let mes = Message::new(tuya_payload, CommandType::Control, Some(seq_id));
+        let replies = self.send(&mes, seq_id)?;
         replies
             .iter()
             .for_each(|mes| info!("Decoded response ({}):\n{}", seq_id, mes));
         Ok(())
     }
 
-    pub fn get(&self, tuya_payload: &str, seq_id: u32) -> Result<Vec<Message>> {
-        let mes = Message::new(tuya_payload.as_bytes(), CommandType::DpQuery, Some(seq_id));
-        let replies = self.send(&mes, tuya_payload, seq_id)?;
+    pub fn get(&self, tuya_payload: Payload, seq_id: u32) -> Result<Vec<Message>> {
+        let mes = Message::new(tuya_payload, CommandType::DpQuery, Some(seq_id));
+        let replies = self.send(&mes, seq_id)?;
         replies
             .iter()
             .for_each(|mes| info!("Decoded response ({}):\n{}", seq_id, mes));
         Ok(replies)
     }
 
-    fn send(&self, mes: &Message, payload: &str, seq_id: u32) -> Result<Vec<Message>> {
+    fn send(&self, mes: &Message, seq_id: u32) -> Result<Vec<Message>> {
         let mut tcpstream = TcpStream::connect(&self.addr)?;
         tcpstream.set_nodelay(true)?;
         tcpstream.set_read_timeout(Some(Duration::new(2, 0)))?;
         tcpstream.set_read_timeout(Some(Duration::new(2, 0)))?;
-        info!(
-            "Writing message to {} ({}):\n{}",
-            self.addr, seq_id, &payload
-        );
+        info!("Writing message to {} ({}):\n{}", self.addr, seq_id, &mes);
         let bts = tcpstream.write(self.mp.encode(&mes, true)?.as_ref())?;
         info!("Wrote {} bytes ({})", bts, seq_id);
         let mut buf = [0; 256];

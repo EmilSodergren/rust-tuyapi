@@ -1,5 +1,6 @@
 use openssl::error::ErrorStack;
 use std::io;
+use std::str::Utf8Error;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -10,6 +11,7 @@ pub enum ErrorKind {
     OpenSSLError(#[from] ErrorStack),
     SystemTimeError(#[from] std::time::SystemTimeError),
     TcpError(#[from] io::Error),
+    Utf8Error(#[from] Utf8Error),
 
     #[error("parsing failed with: {0:?}")]
     ParseError(nom::error::ErrorKind),

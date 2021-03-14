@@ -1,6 +1,7 @@
 use crate::cipher::TuyaCipher;
 use crate::crc::crc;
 use crate::error::ErrorKind;
+use crate::Payload;
 use hex::FromHex;
 use log::{debug, error};
 use nom::{
@@ -15,6 +16,7 @@ use nom::{
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::cmp::PartialEq;
+use std::convert::TryInto;
 use std::fmt;
 use std::str::FromStr;
 
@@ -105,7 +107,7 @@ impl FromStr for TuyaVersion {
 
 #[derive(Debug, PartialEq)]
 pub struct Message {
-    payload: Vec<u8>,
+    payload: Payload,
     command: Option<CommandType>,
     seq_nr: Option<u32>,
     ret_code: Option<u8>,
@@ -116,7 +118,7 @@ impl fmt::Display for Message {
         write!(
             f,
             "Payload: \"{}\", Command: {:?}, Seq Nr: {}, Return Code: {}",
-            std::str::from_utf8(&self.payload).expect("Payload: Not parseable UTF-8"),
+            self.payload,
             self.command.clone().unwrap_or(CommandType::Error),
             self.seq_nr.unwrap_or(0),
             self.ret_code.unwrap_or(255)
@@ -125,9 +127,9 @@ impl fmt::Display for Message {
 }
 
 impl Message {
-    pub fn new(payload: &[u8], command: CommandType, seq_nr: Option<u32>) -> Message {
+    pub fn new(payload: Payload, command: CommandType, seq_nr: Option<u32>) -> Message {
         Message {
-            payload: payload.to_vec(),
+            payload,
             command: Some(command),
             seq_nr,
             ret_code: None,
@@ -157,22 +159,7 @@ impl MessageParser {
         }
         let command = mes.command.clone().ok_or(ErrorKind::CommandTypeMissing)?;
         encoded.extend([0, 0, 0, command.to_u8().unwrap()].iter());
-        let payload = match self.version {
-            TuyaVersion::ThreeOne => {
-                if encrypt {
-                    self.create_payload_with_header(&mes.payload)?
-                } else {
-                    mes.payload.clone()
-                }
-            }
-            TuyaVersion::ThreeThree => {
-                if let Some(CommandType::DpQuery) = mes.command {
-                    self.cipher.encrypt(&mes.payload)?
-                } else {
-                    self.create_payload_with_header(&mes.payload)?
-                }
-            }
-        };
+        let payload = self.create_payload_header(&mes, encrypt)?;
         encoded.extend((payload.len() as u32 + 8_u32).to_be_bytes().iter());
         encoded.extend(payload);
         encoded.extend(crc(&encoded).to_be_bytes().iter());
@@ -186,12 +173,32 @@ impl MessageParser {
         Ok(encoded)
     }
 
-    fn create_payload_with_header(&self, payload: &[u8]) -> Result<Vec<u8>> {
+    fn create_payload_header(&self, mes: &Message, encrypt: bool) -> Result<Vec<u8>> {
+        match self.version {
+            TuyaVersion::ThreeOne => {
+                if encrypt {
+                    self.create_payload_with_header(mes.payload.clone().try_into()?)
+                } else {
+                    mes.payload.clone().try_into()
+                }
+            }
+            TuyaVersion::ThreeThree => {
+                if let Some(CommandType::DpQuery) = mes.command {
+                    let payload: Vec<u8> = mes.payload.clone().try_into()?;
+                    self.cipher.encrypt(&payload)
+                } else {
+                    self.create_payload_with_header(mes.payload.clone().try_into()?)
+                }
+            }
+        }
+    }
+
+    fn create_payload_with_header(&self, payload: Vec<u8>) -> Result<Vec<u8>> {
         let mut payload_with_header = Vec::new();
         payload_with_header.extend(self.version.as_bytes());
         match self.version {
             TuyaVersion::ThreeOne => payload_with_header.extend(vec![0; 12]),
-            TuyaVersion::ThreeThree => payload_with_header.extend(self.cipher.md5(payload)),
+            TuyaVersion::ThreeThree => payload_with_header.extend(self.cipher.md5(&payload)),
         }
         payload_with_header.extend(self.cipher.encrypt(&payload)?);
         Ok(payload_with_header)
@@ -257,10 +264,30 @@ impl MessageParser {
         Ok((buf, messages))
     }
 
-    fn try_decrypt(&self, payload: &[u8]) -> Vec<u8> {
+    fn try_decrypt(&self, payload: &[u8]) -> Payload {
         match self.cipher.decrypt(payload) {
-            Ok(decrypted) => decrypted,
-            Err(_) => payload.to_vec(),
+            Ok(decrypted) => {
+                if let Ok(p) = serde_json::from_slice(&decrypted) {
+                    Payload::Struct(p)
+                } else {
+                    Payload::String(
+                        std::str::from_utf8(&decrypted)
+                            .unwrap_or("Payload invalid")
+                            .to_string(),
+                    )
+                }
+            }
+            Err(_) => {
+                if let Ok(p) = serde_json::from_slice(&payload) {
+                    Payload::Struct(p)
+                } else {
+                    Payload::String(
+                        std::str::from_utf8(&payload)
+                            .unwrap_or("Payload invalid")
+                            .to_string(),
+                    )
+                }
+            }
         }
     }
 }
@@ -284,6 +311,9 @@ fn verify_key(key: Option<&str>) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::PayloadStruct;
+    use serde_json::json;
+    use std::collections::HashMap;
     #[test]
     fn test_key_length_is_16() {
         let key = Some("0123456789ABCDEF");
@@ -313,7 +343,7 @@ mod tests {
             hex::decode("000055aa00000000000000090000000c00000000b051ab030000aa55").unwrap();
         let expected = Message {
             command: Some(CommandType::HeartBeat),
-            payload: Vec::new(),
+            payload: Payload::String("".to_string()),
             seq_nr: Some(0),
             ret_code: Some(0),
         };
@@ -327,11 +357,17 @@ mod tests {
     fn test_parse_messages_with_payload() {
         let packet =
             hex::decode("000055aa00000000000000070000005b00000000332e33290725773ab6c9a1184b38fc8f439ca4abe8d958d12d34a39a6bf230c7ed59d77c0499f0f543640ae8a029957a55b39b5d0213726b385ece93bf5ae2330f71be0f0390f4075008032a624750cd3bfb680000aa55").unwrap();
+        let mut dps = HashMap::new();
+        dps.insert("1".to_string(), json!(true));
         let expected = Message {
             command: Some(CommandType::Control),
-            payload: r#"{"dev_id":"46052834d8f15b92e53b","dps":{"1":true}}"#
-                .as_bytes()
-                .to_owned(),
+            payload: Payload::Struct(PayloadStruct {
+                dev_id: "46052834d8f15b92e53b".to_string(),
+                gw_id: None,
+                uid: None,
+                t: None,
+                dps,
+            }),
             seq_nr: Some(0),
             ret_code: Some(0),
         };
@@ -347,7 +383,7 @@ mod tests {
             hex::decode("000055aa00000000000000070000003b00000001332e33d504910232d355a59ed1f6ed1f4a816a1e8e30ed09987c020ae45d72c70592bb233c79c43a5b9ae49b6ead38725deb520000aa55").unwrap();
         let expected = Message {
             command: Some(CommandType::Control),
-            payload: "data format error".as_bytes().to_owned(),
+            payload: Payload::String("data format error".to_string()),
             seq_nr: Some(0),
             ret_code: Some(1),
         };
@@ -364,13 +400,13 @@ mod tests {
         let expected = vec![
             Message {
                 command: Some(CommandType::HeartBeat),
-                payload: Vec::new(),
+                payload: Payload::String("".to_string()),
                 seq_nr: Some(0),
                 ret_code: Some(0),
             },
             Message {
                 command: Some(CommandType::DpQuery),
-                payload: Vec::new(),
+                payload: Payload::String("".to_string()),
                 seq_nr: Some(0),
                 ret_code: Some(0),
             },
@@ -384,9 +420,16 @@ mod tests {
 
     #[test]
     fn test_encode_with_and_without_encryption_and_version_three_one() {
-        let payload = r#"{"devId":"002004265ccf7fb1b659","dps":{"1":true,"2":0}}"#
-            .as_bytes()
-            .to_owned();
+        let mut dps = HashMap::new();
+        dps.insert("1".to_string(), json!(true));
+        dps.insert("2".to_string(), json!(0));
+        let payload = Payload::Struct(PayloadStruct {
+            dev_id: "002004265ccf7fb1b659".to_string(),
+            gw_id: None,
+            uid: None,
+            t: None,
+            dps,
+        });
         let mes = Message {
             command: Some(CommandType::DpQuery),
             payload,
@@ -402,9 +445,15 @@ mod tests {
 
     #[test]
     fn test_encode_with_and_without_encryption_and_version_three_three() {
-        let payload = r#"{"devId":"002004265ccf7fb1b659","dps":{"1":true,"2":0}}"#
-            .as_bytes()
-            .to_owned();
+        let mut dps = HashMap::new();
+        dps.insert("1".to_string(), json!(true));
+        let payload = Payload::Struct(PayloadStruct {
+            dev_id: "002004265ccf7fb1b659".to_string(),
+            gw_id: None,
+            uid: None,
+            t: None,
+            dps,
+        });
         let mes = Message {
             command: Some(CommandType::DpQuery),
             payload,
