@@ -117,11 +117,11 @@ impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Payload: \"{}\", Command: {:?}, Seq Nr: {}, Return Code: {}",
+            "Payload: \"{}\", Command: {:?}, Seq Nr: {:?}, Return Code: {:?}",
             self.payload,
             self.command.clone().unwrap_or(CommandType::Error),
-            self.seq_nr.unwrap_or(0),
-            self.ret_code.unwrap_or(255)
+            self.seq_nr,
+            self.ret_code,
         )
     }
 }
