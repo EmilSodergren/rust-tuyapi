@@ -160,7 +160,18 @@ impl MessageParser {
         let command = mes.command.clone().ok_or(ErrorKind::CommandTypeMissing)?;
         encoded.extend([0, 0, 0, command.to_u8().unwrap()].iter());
         let payload = self.create_payload_header(&mes, encrypt)?;
-        encoded.extend((payload.len() as u32 + 8_u32).to_be_bytes().iter());
+        let ret_len = match mes.ret_code {
+            Some(_) => 4_u32,
+            None => 0_u32,
+        };
+        encoded.extend(
+            (payload.len() as u32 + 8_u32 + ret_len)
+                .to_be_bytes()
+                .iter(),
+        );
+        if let Some(ret_code) = mes.ret_code {
+            encoded.extend(&ret_code.to_be_bytes());
+        }
         encoded.extend(payload);
         encoded.extend(crc(&encoded).to_be_bytes().iter());
         encoded.extend_from_slice(&*SUFFIX_BYTES);
@@ -355,8 +366,7 @@ mod tests {
 
     #[test]
     fn test_parse_messages_with_payload() {
-        let packet =
-            hex::decode("000055aa00000000000000070000005b00000000332e33290725773ab6c9a1184b38fc8f439ca4abe8d958d12d34a39a6bf230c7ed59d77c0499f0f543640ae8a029957a55b39b5d0213726b385ece93bf5ae2330f71be0f0390f4075008032a624750cd3bfb680000aa55").unwrap();
+        let packet = hex::decode("000055aa00000000000000070000005b00000000332e33d8bab8946c604148a45c15326ed3b99d683695a73c624e75a5aaa31f4061f5b99033e6d01f0b0abf9dbc76b2a54eb4bf60976b1dc496169db9e5a3fd627f2c3d9c4744585e471b6a2fc479ca01f7e18e0000aa55").unwrap();
         let mut dps = HashMap::new();
         dps.insert("1".to_string(), json!(true));
         let expected = Message {

@@ -60,9 +60,9 @@ impl Display for Payload {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct PayloadStruct {
-    #[serde(alias = "devId")]
+    #[serde(rename = "devId")]
     dev_id: String,
-    #[serde(alias = "gwId", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "gwId", skip_serializing_if = "Option::is_none")]
     gw_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     uid: Option<String>,
