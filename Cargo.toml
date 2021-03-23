@@ -23,7 +23,7 @@ lazy_static = "1.4"
 log = "0.4"
 md5 = "0.7"
 nom = "6.1"
-num = "0.3"
+num = "0.4"
 num-derive = "0.3"
 num-traits = "0.2"
 openssl = { version = "0.10", features = ["vendored"] }
