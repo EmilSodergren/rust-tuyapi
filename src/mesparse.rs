@@ -217,10 +217,10 @@ impl MessageParser {
 
     pub fn parse(&self, buf: &[u8]) -> Result<Vec<Message>> {
         let (buf, messages) = self.parse_messages(buf).map_err(|err| match err {
-            nom::Err::Error((_, e)) => ErrorKind::ParseError(e),
+            nom::Err::Error(e) => ErrorKind::ParseError(e.code),
             nom::Err::Incomplete(_) => ErrorKind::ParsingIncomplete,
-            nom::Err::Failure((_, e)) if e == nom::error::ErrorKind::ManyMN => ErrorKind::CRCError,
-            nom::Err::Failure((_, e)) => ErrorKind::ParseError(e),
+            nom::Err::Failure(e) if e.code == nom::error::ErrorKind::ManyMN => ErrorKind::CRCError,
+            nom::Err::Failure(e) => ErrorKind::ParseError(e.code),
         })?;
         if !buf.is_empty() {
             return Err(ErrorKind::BufferNotCompletelyParsedError);
@@ -260,7 +260,10 @@ impl MessageParser {
                 );
                 // I hijack the ErrorKind::ManyMN here to propagate a CRC error
                 // TODO: should probably create and use a special CRC error here
-                return Err(nom::Err::Failure((rc, nom::error::ErrorKind::ManyMN)));
+                return Err(nom::Err::Failure(nom::error::Error::new(
+                    rc,
+                    nom::error::ErrorKind::ManyMN,
+                )));
             }
 
             let payload = self.try_decrypt(payload);
