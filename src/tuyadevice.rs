@@ -1,3 +1,10 @@
+//! # TuyaDevice
+//! The TuyaDevice represents a communication channel with a Tuya compatible device. It
+//! encapsulates the device key, version and ip address. By supplying a Payload to either set() or
+//! get() functions the framework takes care of sending and receiving the reply from the device.
+//!
+//! The TuyaDevice is the high level device communication API. To get in to the nitty gritty
+//! details, create a MessageParser.
 use crate::error::ErrorKind;
 use crate::mesparse::{CommandType, Message, MessageParser, Result};
 use crate::Payload;

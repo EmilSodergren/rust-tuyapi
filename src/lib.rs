@@ -1,3 +1,41 @@
+//! # Rust Tuyapi
+//! This is a library to interact with Tuya Smarthome devices.
+//!
+//! ## Example
+//! This shows how to turn on a wall socket.
+//! ```no_run
+//! # extern crate rust_tuyapi;
+//! # use rust_tuyapi::{Payload, PayloadStruct,tuyadevice::TuyaDevice};
+//! # use std::net::IpAddr;
+//! # use std::str::FromStr;
+//! # use std::collections::HashMap;
+//! # use std::time::SystemTime;
+//! # use serde_json::json;
+//! # fn main() -> rust_tuyapi::mesparse::Result<()> {
+//! // The dps value is device specific, this socket turns on with key "1"
+//! let mut dps = HashMap::new();
+//! dps.insert("1".to_string(), json!(true));
+//! let current_time = SystemTime::now()
+//!     .duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as u32;
+//!
+//! // Create the payload to be sent, this will be serialized to the JSON format
+//! let payload = Payload::Struct(PayloadStruct{
+//!        dev_id: "123456789abcdef".to_string(),
+//!        gw_id: Some("123456789abcdef".to_string()),
+//!        uid: None,
+//!        t: Some(current_time),
+//!        dps: dps,
+//!        });
+//! // Create a TuyaDevice, this is the type used to set/get status to/from a Tuya compatible
+//! // device.
+//! let tuya_device = TuyaDevice::create("ver3.3", Some("fedcba987654321"),
+//!     IpAddr::from_str("192.168.0.123").unwrap())?;
+//!
+//! // Set the payload state on the tuya device
+//! tuya_device.set(payload.clone(), 0)?;
+//! # Ok(())
+//! # }
+//! ```
 mod cipher;
 mod crc;
 pub mod error;
@@ -19,6 +57,8 @@ use std::fmt::Display;
 use crate::error::ErrorKind;
 use std::convert::TryInto;
 
+/// The Payload struct represents a payload sent to and recevied from the tuya devices. It might be
+/// a struct (ser/de from the json format) or a plain string.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Payload {
     Struct(PayloadStruct),
