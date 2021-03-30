@@ -59,14 +59,14 @@ impl Display for Payload {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct PayloadStruct {
     #[serde(rename = "devId")]
-    dev_id: String,
+    pub dev_id: String,
     #[serde(rename = "gwId", skip_serializing_if = "Option::is_none")]
-    gw_id: Option<String>,
+    pub gw_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    uid: Option<String>,
+    pub uid: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    t: Option<u32>,
-    dps: HashMap<String, serde_json::Value>,
+    pub t: Option<u32>,
+    pub dps: HashMap<String, serde_json::Value>,
 }
 
 pub trait Scramble {
