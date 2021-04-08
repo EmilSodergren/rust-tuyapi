@@ -19,10 +19,6 @@ use std::fmt::Display;
 use crate::error::ErrorKind;
 use std::convert::TryInto;
 
-pub enum TuyaType {
-    Socket,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Payload {
     Struct(PayloadStruct),
