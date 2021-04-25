@@ -1,4 +1,5 @@
-use crate::mesparse::{Result, TuyaVersion};
+use crate::mesparse:: TuyaVersion;
+use crate::Result;
 use openssl::symm::{decrypt, encrypt, Cipher};
 
 pub(crate) struct TuyaCipher {

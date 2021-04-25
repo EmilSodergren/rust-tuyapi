@@ -1,7 +1,7 @@
 use crate::cipher::TuyaCipher;
 use crate::crc::crc;
 use crate::error::ErrorKind;
-use crate::Payload;
+use crate::{Payload, Result};
 use hex::FromHex;
 use log::{debug, error};
 use nom::{
@@ -19,8 +19,6 @@ use std::cmp::PartialEq;
 use std::convert::TryInto;
 use std::fmt;
 use std::str::FromStr;
-
-pub type Result<T> = std::result::Result<T, ErrorKind>;
 
 const UDP_KEY: &str = "yGAdlopoPVldABfn";
 

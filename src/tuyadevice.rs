@@ -1,6 +1,6 @@
 use crate::error::ErrorKind;
-use crate::mesparse::{CommandType, Message, MessageParser, Result};
-use crate::Payload;
+use crate::mesparse::{CommandType, Message, MessageParser};
+use crate::{Payload, Result};
 use log::{debug, info};
 use std::io::prelude::*;
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream};

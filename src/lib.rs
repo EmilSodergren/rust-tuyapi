@@ -11,13 +11,14 @@ extern crate lazy_static;
 
 use serde::{Deserialize, Serialize};
 
-use crate::mesparse::Result;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Display;
 
 use crate::error::ErrorKind;
 use std::convert::TryInto;
+
+pub type Result<T> = std::result::Result<T, ErrorKind>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Payload {
@@ -65,11 +66,12 @@ pub struct PayloadStruct {
     pub dps: HashMap<String, serde_json::Value>,
 }
 
-pub trait Scramble {
-    fn scramble(&self) -> Self;
+/// This trait is implemented to allow truncated logging of secret data.
+pub trait Truncate {
+    fn truncate(&self) -> Self;
 
     /// Take the last 5 characters
-    fn scramble_str(text: &str) -> &str {
+    fn truncate_str(text: &str) -> &str {
         if let Some((i, _)) = text.char_indices().rev().nth(5) {
             return &text[i..];
         }
@@ -98,14 +100,14 @@ impl TryInto<Vec<u8>> for Payload {
     }
 }
 
-impl Scramble for PayloadStruct {
-    fn scramble(&self) -> PayloadStruct {
+impl Truncate for PayloadStruct {
+    fn truncate(&self) -> PayloadStruct {
         PayloadStruct {
-            dev_id: String::from("...") + Self::scramble_str(&self.dev_id),
+            dev_id: String::from("...") + Self::truncate_str(&self.dev_id),
             gw_id: self
                 .gw_id
                 .as_ref()
-                .map(|gwid| String::from("...") + Self::scramble_str(gwid)),
+                .map(|gwid| String::from("...") + Self::truncate_str(gwid)),
             t: self.t,
             uid: self.uid.clone(),
             dps: self.dps.clone(),
@@ -119,7 +121,7 @@ impl Display for PayloadStruct {
         if full_display {
             write!(f, "{}", serde_json::to_string(self).unwrap())
         } else {
-            write!(f, "{}", serde_json::to_string(&self.scramble()).unwrap())
+            write!(f, "{}", serde_json::to_string(&self.truncate()).unwrap())
         }
     }
 }
