@@ -109,6 +109,10 @@ impl FromStr for TuyaVersion {
     }
 }
 
+/// Representation of a message sent to and received from a Tuya device. The Payload is
+/// serialized to and deserialized from JSON. The sequence number, if sent in a command, will
+/// be included in the response to be able to connect command and response. The return code is
+/// only included if the Message is a response from a device.
 #[derive(Debug, PartialEq)]
 pub struct Message {
     payload: Payload,
@@ -141,11 +145,17 @@ impl Message {
     }
 }
 
+/// The message parser takes care of encoding and parsing messages before send and after
+/// receive. It uses a TuyaCipher to encrypt and decrypt messages sent with the Tuya
+/// protocol version 3.3.
 pub struct MessageParser {
     version: TuyaVersion,
     cipher: TuyaCipher,
 }
 
+/// MessageParser encodes and parses messages sent to and from Tuya devices. It may or may not
+/// encrypt the message, depending on message type and TuyaVersion. Likewise, the parsing may or may
+/// not need decrypting.
 impl MessageParser {
     pub fn create(ver: &str, key: Option<&str>) -> Result<MessageParser> {
         let version = TuyaVersion::from_str(ver)?;

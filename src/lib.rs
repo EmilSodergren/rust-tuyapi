@@ -1,5 +1,6 @@
 //! # Rust Tuyapi
-//! This is a library to interact with Tuya Smarthome devices.
+//! This library can be used to interact with Tuya/Smart Home devices. It utilizes the Tuya
+//! protocol version 3.1 and 3.3 to send and receive messages from the devices.
 //!
 //! ## Example
 //! This shows how to turn on a wall socket.
@@ -31,8 +32,9 @@
 //! let tuya_device = TuyaDevice::create("ver3.3", Some("fedcba987654321"),
 //!     IpAddr::from_str("192.168.0.123").unwrap())?;
 //!
-//! // Set the payload state on the tuya device
-//! tuya_device.set(payload.clone(), 0)?;
+//! // Set the payload state on the Tuya device, an error here will contain
+//! // the error message received from the device.
+//! tuya_device.set(payload, 0)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -57,8 +59,8 @@ use std::fmt::Display;
 use crate::error::ErrorKind;
 use std::convert::TryInto;
 
-/// The Payload struct represents a payload sent to and recevied from the tuya devices. It might be
-/// a struct (ser/de from the json format) or a plain string.
+/// The Payload enum represents a payload sent to, and recevied from the Tuya devices. It might be
+/// a struct (ser/de from json) or a plain string.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Payload {
     Struct(PayloadStruct),
@@ -92,6 +94,8 @@ impl Display for Payload {
     }
 }
 
+/// The PayloadStruct is Serialized to json and sent to the device. The dps field contains the
+/// actual commands to set and are device specific.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct PayloadStruct {
     #[serde(rename = "devId")]
