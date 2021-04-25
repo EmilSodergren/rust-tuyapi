@@ -1,4 +1,5 @@
-use crate::mesparse::{Result, TuyaVersion};
+use crate::mesparse:: TuyaVersion;
+use crate::Result;
 use openssl::symm::{decrypt, encrypt, Cipher};
 
 /// TuyaCipher is a low level api for encrypting and decrypting Vec<u8>'s.
