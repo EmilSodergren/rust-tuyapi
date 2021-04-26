@@ -6,13 +6,13 @@
 //! This shows how to turn on a wall socket.
 //! ```no_run
 //! # extern crate rust_tuyapi;
-//! # use rust_tuyapi::{Payload, PayloadStruct,tuyadevice::TuyaDevice};
+//! # use rust_tuyapi::{Payload, Result, PayloadStruct,tuyadevice::TuyaDevice};
 //! # use std::net::IpAddr;
 //! # use std::str::FromStr;
 //! # use std::collections::HashMap;
 //! # use std::time::SystemTime;
 //! # use serde_json::json;
-//! # fn main() -> rust_tuyapi::mesparse::Result<()> {
+//! # fn main() -> Result<()> {
 //! // The dps value is device specific, this socket turns on with key "1"
 //! let mut dps = HashMap::new();
 //! dps.insert("1".to_string(), json!(true));
