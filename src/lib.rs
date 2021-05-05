@@ -58,6 +58,7 @@ use std::fmt::Display;
 use crate::error::ErrorKind;
 use std::convert::TryInto;
 
+pub type Result<T> = std::result::Result<T, ErrorKind>;
 /// The Payload enum represents a payload sent to, and recevied from the Tuya devices. It might be
 /// a struct (ser/de from json) or a plain string.
 #[derive(Debug, Clone, PartialEq)]
