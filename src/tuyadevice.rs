@@ -49,6 +49,15 @@ impl TuyaDevice {
         Ok(replies)
     }
 
+    pub fn refresh(&self, tuya_payload: Payload, seq_id: u32) -> Result<Vec<Message>> {
+        let mes = Message::new(tuya_payload, CommandType::DpRefresh, Some(seq_id));
+        let replies = self.send(&mes, seq_id)?;
+        replies
+            .iter()
+            .for_each(|mes| info!("Decoded response ({}):\n{}", seq_id, mes));
+        Ok(replies)
+    }
+
     fn send(&self, mes: &Message, seq_id: u32) -> Result<Vec<Message>> {
         let mut tcpstream = TcpStream::connect(&self.addr)?;
         tcpstream.set_nodelay(true)?;

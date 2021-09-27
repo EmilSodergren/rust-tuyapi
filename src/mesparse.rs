@@ -51,6 +51,7 @@ pub enum CommandType {
     EnableWifi = 14,
     DpQueryNew = 16,
     SceneExecute = 17,
+    DpRefresh = 18,
     UdpNew = 19,
     ApConfigNew = 20,
     LanGwActive = 240,
