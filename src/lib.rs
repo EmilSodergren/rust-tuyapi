@@ -25,7 +25,8 @@
 //!        gw_id: Some("123456789abcdef".to_string()),
 //!        uid: None,
 //!        t: Some(current_time),
-//!        dps: dps,
+//!        dp_id: None,
+//!        dps: Some(dps),
 //!        });
 //! // Create a TuyaDevice, this is the type used to set/get status to/from a Tuya compatible
 //! // device.
@@ -67,19 +68,36 @@ pub enum Payload {
     String(String),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum DpId {
+    Lower,
+    Higher,
+}
+
+impl DpId {
+    fn get_ids(self) -> Vec<u8> {
+        match self {
+            DpId::Lower => vec![4, 5, 6],
+            DpId::Higher => vec![18, 19, 20],
+        }
+    }
+}
+
 impl Payload {
     pub fn new(
         dev_id: String,
         gw_id: Option<String>,
         uid: Option<String>,
         t: Option<u32>,
-        dps: HashMap<String, serde_json::Value>,
+        dp_id: Option<DpId>,
+        dps: Option<HashMap<String, serde_json::Value>>,
     ) -> Payload {
         Payload::Struct(PayloadStruct {
             dev_id,
             gw_id,
             uid,
             t,
+            dp_id: dp_id.map(DpId::get_ids),
             dps,
         })
     }
@@ -106,7 +124,10 @@ pub struct PayloadStruct {
     pub uid: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub t: Option<u32>,
-    pub dps: HashMap<String, serde_json::Value>,
+    #[serde(rename = "dpId", skip_serializing_if = "Option::is_none")]
+    pub dp_id: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dps: Option<HashMap<String, serde_json::Value>>,
 }
 
 /// This trait is implemented to allow truncated logging of secret data.
@@ -152,6 +173,7 @@ impl Truncate for PayloadStruct {
                 .as_ref()
                 .map(|gwid| String::from("...") + Self::truncate_str(gwid)),
             t: self.t,
+            dp_id: self.dp_id.clone(),
             uid: self.uid.clone(),
             dps: self.dps.clone(),
         }

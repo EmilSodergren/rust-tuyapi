@@ -206,14 +206,13 @@ impl MessageParser {
                     mes.payload.clone().try_into()
                 }
             }
-            TuyaVersion::ThreeThree => {
-                if let Some(CommandType::DpQuery) = mes.command {
+            TuyaVersion::ThreeThree => match mes.command {
+                Some(CommandType::DpQuery) | Some(CommandType::DpRefresh) => {
                     let payload: Vec<u8> = mes.payload.clone().try_into()?;
                     self.cipher.encrypt(&payload)
-                } else {
-                    self.create_payload_with_header(mes.payload.clone().try_into()?)
                 }
-            }
+                _ => self.create_payload_with_header(mes.payload.clone().try_into()?),
+            },
         }
     }
 
@@ -392,7 +391,8 @@ mod tests {
                 gw_id: None,
                 uid: None,
                 t: None,
-                dps,
+                dp_id: None,
+                dps: Some(dps),
             }),
             seq_nr: Some(0),
             ret_code: Some(0),
@@ -454,7 +454,8 @@ mod tests {
             gw_id: None,
             uid: None,
             t: None,
-            dps,
+            dp_id: None,
+            dps: Some(dps),
         });
         let mes = Message {
             command: Some(CommandType::DpQuery),
@@ -478,7 +479,8 @@ mod tests {
             gw_id: None,
             uid: None,
             t: None,
-            dps,
+            dp_id: None,
+            dps: Some(dps),
         });
         let mes = Message {
             command: Some(CommandType::DpQuery),

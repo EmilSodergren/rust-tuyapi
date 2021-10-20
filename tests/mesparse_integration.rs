@@ -8,7 +8,14 @@ use std::collections::HashMap;
 fn create_test_payload() -> Payload {
     let mut dps = HashMap::new();
     dps.insert("1".to_string(), json!(true));
-    Payload::new("002004265ccf7fb1b659".to_string(), None, None, None, dps)
+    Payload::new(
+        "002004265ccf7fb1b659".to_string(),
+        None,
+        None,
+        None,
+        None,
+        Some(dps),
+    )
 }
 
 #[test]
