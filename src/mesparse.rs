@@ -114,7 +114,7 @@ impl FromStr for TuyaVersion {
 /// only included if the Message is a response from a device.
 #[derive(Debug, PartialEq)]
 pub struct Message {
-    payload: Payload,
+    pub payload: Payload,
     command: Option<CommandType>,
     seq_nr: Option<u32>,
     ret_code: Option<u8>,
