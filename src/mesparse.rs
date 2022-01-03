@@ -115,9 +115,9 @@ impl FromStr for TuyaVersion {
 #[derive(Debug, PartialEq)]
 pub struct Message {
     pub payload: Payload,
-    command: Option<CommandType>,
-    seq_nr: Option<u32>,
-    ret_code: Option<u8>,
+    pub command: Option<CommandType>,
+    pub seq_nr: Option<u32>,
+    pub ret_code: Option<u8>,
 }
 
 impl fmt::Display for Message {
