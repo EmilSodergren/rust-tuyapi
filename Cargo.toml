@@ -2,7 +2,7 @@
 name = "rust-tuyapi"
 version = "0.8.3"
 authors = ["Emil Sodergren <EmilSodergren@users.noreply.github.com>"]
-edition = "2018"
+edition = "2021"
 description = "This package is a rust port of the exellent NodeJS implementation by codetheweb for the Tuya API"
 homepage = "https://github.com/EmilSodergren/rust-tuyapi"
 repository = "https://github.com/EmilSodergren/rust-tuyapi"
