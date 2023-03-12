@@ -13,7 +13,7 @@ keywords = ["tuya", "smarthome", "smartlife"]
 
 [dependencies]
 atomic-counter = "1.0.1"
-base64 = "0.20"
+base64 = "0.21"
 hex = "0.4"
 json = "0.12"
 lazy_static = "1.4"
