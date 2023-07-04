@@ -1,5 +1,6 @@
-use crate::mesparse:: TuyaVersion;
+use crate::mesparse::TuyaVersion;
 use crate::Result;
+use base64::{engine::general_purpose, Engine as _};
 use openssl::symm::{decrypt, encrypt, Cipher};
 
 /// TuyaCipher is a low level api for encrypting and decrypting Vec<u8>'s.
@@ -32,17 +33,17 @@ impl TuyaCipher {
     pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
         let res = encrypt(self.cipher, &self.key, None, data)?;
         match self.version {
-            TuyaVersion::ThreeOne => Ok(base64::encode(res).as_bytes().to_vec()),
+            TuyaVersion::ThreeOne => Ok(general_purpose::STANDARD.encode(res).as_bytes().to_vec()),
             TuyaVersion::ThreeThree => Ok(res),
         }
     }
 
     pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
         // Different header size in version 3.1 and 3.3
-        let data = maybe_strip_header(&self.version, &data);
+        let data = maybe_strip_header(&self.version, data);
         // 3.1 is base64 encoded, 3.3 is not
         let data = match self.version {
-            TuyaVersion::ThreeOne => base64::decode(&data)?,
+            TuyaVersion::ThreeOne => general_purpose::STANDARD.decode(&data)?,
             TuyaVersion::ThreeThree => data.to_vec(),
         };
         let res = decrypt(self.cipher, &self.key, None, &data)?;
@@ -127,7 +128,7 @@ mod tests {
     fn decrypt_message_with_version_threethree() {
         let cipher = TuyaCipher::create(b"bbe88b3f4106d354", TuyaVersion::ThreeThree);
         let message = b"zrA8OK3r3JMiUXpXDWauNppY4Am2c8rZ6sb4Yf15MjM8n5ByDx+QWeCZtcrPqddxLrhm906bSKbQAFtT1uCp+zP5AxlqJf5d0Pp2OxyXyjg=".to_vec();
-        let message = base64::decode(&message).unwrap();
+        let message = general_purpose::STANDARD.decode(&message).unwrap();
         let expected =
             r#"{"devId":"002004265ccf7fb1b659","dps":{"1":false,"2":0},"t":1529442366,"s":8}"#
                 .as_bytes()

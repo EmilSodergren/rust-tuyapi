@@ -59,12 +59,12 @@ impl TuyaDevice {
     }
 
     fn send(&self, mes: &Message, seq_id: u32) -> Result<Vec<Message>> {
-        let mut tcpstream = TcpStream::connect(&self.addr)?;
+        let mut tcpstream = TcpStream::connect(self.addr)?;
         tcpstream.set_nodelay(true)?;
         tcpstream.set_read_timeout(Some(Duration::new(2, 0)))?;
         tcpstream.set_read_timeout(Some(Duration::new(2, 0)))?;
         info!("Writing message to {} ({}):\n{}", self.addr, seq_id, &mes);
-        let bts = tcpstream.write(self.mp.encode(&mes, true)?.as_ref())?;
+        let bts = tcpstream.write(self.mp.encode(mes, true)?.as_ref())?;
         info!("Wrote {} bytes ({})", bts, seq_id);
         let mut buf = [0; 256];
         let bts = tcpstream.read(&mut buf)?;

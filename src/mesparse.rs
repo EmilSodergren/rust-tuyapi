@@ -172,7 +172,7 @@ impl MessageParser {
         }
         let command = mes.command.clone().ok_or(ErrorKind::CommandTypeMissing)?;
         encoded.extend([0, 0, 0, command.to_u8().unwrap()].iter());
-        let payload = self.create_payload_header(&mes, encrypt)?;
+        let payload = self.create_payload_header(mes, encrypt)?;
         let ret_len = match mes.ret_code {
             Some(_) => 4_u32,
             None => 0_u32,
@@ -304,11 +304,11 @@ impl MessageParser {
                 }
             }
             Err(_) => {
-                if let Ok(p) = serde_json::from_slice(&payload) {
+                if let Ok(p) = serde_json::from_slice(payload) {
                     Payload::Struct(p)
                 } else {
                     Payload::String(
-                        std::str::from_utf8(&payload)
+                        std::str::from_utf8(payload)
                             .unwrap_or("Payload invalid")
                             .to_string(),
                     )
