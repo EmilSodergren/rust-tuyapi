@@ -347,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    fn test_key_lenght_not_16_gives_error() {
+    fn test_key_length_not_16_gives_error() {
         let bad_key = Some("13579BDF");
         assert!(verify_key(bad_key).is_err());
     }
