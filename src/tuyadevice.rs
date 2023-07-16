@@ -13,21 +13,40 @@ use std::io::prelude::*;
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream};
 use std::time::Duration;
 
+pub enum Transport {
+    TCP(u16),
+    UDP(u16),
+}
+
 pub struct TuyaDevice {
     mp: MessageParser,
     addr: SocketAddr,
+    transport: Transport,
 }
 
 impl TuyaDevice {
     pub fn create(ver: &str, key: Option<&str>, addr: IpAddr) -> Result<TuyaDevice> {
         let mp = MessageParser::create(ver, key)?;
-        Ok(TuyaDevice::create_with_mp(mp, addr))
+        Ok(TuyaDevice::create_with_mp(mp, addr, Transport::TCP(6668)))
     }
 
-    pub fn create_with_mp(mp: MessageParser, addr: IpAddr) -> TuyaDevice {
-        TuyaDevice {
-            mp,
-            addr: SocketAddr::new(addr, 6668),
+    pub fn create_with_transport(
+        ver: &str,
+        key: Option<&str>,
+        addr: IpAddr,
+        transport: Transport,
+    ) -> Result<TuyaDevice> {
+        let mp = MessageParser::create(ver, key)?;
+        Ok(TuyaDevice::create_with_mp(mp, addr, transport))
+    }
+
+    pub fn create_with_mp(mp: MessageParser, addr: IpAddr, transport: Transport) -> TuyaDevice {
+        match transport {
+            Transport::TCP(port) | Transport::UDP(port) => TuyaDevice {
+                mp,
+                addr: SocketAddr::new(addr, port),
+                transport,
+            },
         }
     }
 
@@ -59,6 +78,13 @@ impl TuyaDevice {
     }
 
     fn send(&self, mes: &Message, seq_id: u32) -> Result<Vec<Message>> {
+        match self.transport {
+            Transport::TCP(_) => self.send_with_tcp(mes, seq_id),
+            Transport::UDP(_) => todo!(),
+        }
+    }
+
+    fn send_with_tcp(&self, mes: &Message, seq_id: u32) -> Result<Vec<Message>> {
         let mut tcpstream = TcpStream::connect(self.addr)?;
         tcpstream.set_nodelay(true)?;
         tcpstream.set_read_timeout(Some(Duration::new(2, 0)))?;
