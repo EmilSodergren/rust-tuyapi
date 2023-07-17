@@ -87,6 +87,7 @@ impl TuyaDevice {
     fn send_with_tcp(&self, mes: &Message, seq_id: u32) -> Result<Vec<Message>> {
         let mut tcpstream = TcpStream::connect(self.addr)?;
         tcpstream.set_nodelay(true)?;
+        tcpstream.set_write_timeout(Some(Duration::new(2, 0)))?;
         tcpstream.set_read_timeout(Some(Duration::new(2, 0)))?;
         info!(
             "Writing message to TCP:{} ({}):\n{}",
@@ -112,7 +113,9 @@ impl TuyaDevice {
     }
 
     fn send_with_udp(&self, mes: &Message, seq_id: u32) -> Result<Vec<Message>> {
-        let udpsocket = UdpSocket::bind(self.addr)?;
+        let udpsocket = UdpSocket::bind(format!("0.0.0.0:{}", self.addr.port()))?;
+        udpsocket.connect(self.addr)?;
+        udpsocket.set_write_timeout(Some(Duration::new(2, 0)))?;
         udpsocket.set_read_timeout(Some(Duration::new(2, 0)))?;
         info!(
             "Writing message to UDP:{} ({}):\n{}",
@@ -124,7 +127,7 @@ impl TuyaDevice {
         let bts = udpsocket.recv(&mut buf)?;
         info!("Received {} bytes ({})", bts, seq_id);
         if bts == 0 {
-            return Err(ErrorKind::BadTcpRead);
+            return Err(ErrorKind::BadUdpRead);
         } else {
             debug!(
                 "Received response ({}):\n{}",
