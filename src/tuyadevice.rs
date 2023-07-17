@@ -13,21 +13,64 @@ use std::io::prelude::*;
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream};
 use std::time::Duration;
 
+pub enum Transport {
+    TCP(u16),
+}
+
 pub struct TuyaDevice {
     mp: MessageParser,
     addr: SocketAddr,
+    transport: Transport,
+}
+
+trait TuyaTransport {
+    fn tt_setup(&self) -> Result<()>;
+    fn tt_write(&mut self, buf: &[u8]) -> Result<usize>;
+    fn tt_read(&mut self, buf: &mut [u8]) -> Result<usize>;
+    fn tt_teardown(&self) -> Result<()>;
+}
+
+impl TuyaTransport for TcpStream {
+    fn tt_setup(&self) -> Result<()> {
+        self.set_nodelay(true)?;
+        self.set_write_timeout(Some(Duration::new(2, 0)))?;
+        self.set_read_timeout(Some(Duration::new(2, 0)))?;
+        Ok(())
+    }
+    fn tt_write(&mut self, buf: &[u8]) -> Result<usize> {
+        Ok(self.write(buf)?)
+    }
+    fn tt_read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        Ok(self.read(buf)?)
+    }
+    fn tt_teardown(&self) -> Result<()> {
+        Ok(self.shutdown(Shutdown::Both)?)
+    }
 }
 
 impl TuyaDevice {
     pub fn create(ver: &str, key: Option<&str>, addr: IpAddr) -> Result<TuyaDevice> {
         let mp = MessageParser::create(ver, key)?;
-        Ok(TuyaDevice::create_with_mp(mp, addr))
+        Ok(TuyaDevice::create_with_mp(mp, addr, Transport::TCP(6668)))
     }
 
-    pub fn create_with_mp(mp: MessageParser, addr: IpAddr) -> TuyaDevice {
-        TuyaDevice {
-            mp,
-            addr: SocketAddr::new(addr, 6668),
+    pub fn create_with_transport(
+        ver: &str,
+        key: Option<&str>,
+        addr: IpAddr,
+        transport: Transport,
+    ) -> Result<TuyaDevice> {
+        let mp = MessageParser::create(ver, key)?;
+        Ok(TuyaDevice::create_with_mp(mp, addr, transport))
+    }
+
+    pub fn create_with_mp(mp: MessageParser, addr: IpAddr, transport: Transport) -> TuyaDevice {
+        match transport {
+            Transport::TCP(port) => TuyaDevice {
+                mp,
+                addr: SocketAddr::new(addr, port),
+                transport,
+            },
         }
     }
 
@@ -59,18 +102,20 @@ impl TuyaDevice {
     }
 
     fn send(&self, mes: &Message, seq_id: u32) -> Result<Vec<Message>> {
-        let mut tcpstream = TcpStream::connect(self.addr)?;
-        tcpstream.set_nodelay(true)?;
-        tcpstream.set_read_timeout(Some(Duration::new(2, 0)))?;
-        tcpstream.set_read_timeout(Some(Duration::new(2, 0)))?;
+        let mut tt = match self.transport {
+            Transport::TCP(_) => TcpStream::connect(self.addr)?,
+        };
+        tt.tt_setup()?;
         info!("Writing message to {} ({}):\n{}", self.addr, seq_id, &mes);
-        let bts = tcpstream.write(self.mp.encode(mes, true)?.as_ref())?;
+        let bts = tt.tt_write(self.mp.encode(mes, true)?.as_ref())?;
         info!("Wrote {} bytes ({})", bts, seq_id);
         let mut buf = [0; 256];
-        let bts = tcpstream.read(&mut buf)?;
+        let bts = tt.tt_read(&mut buf)?;
         info!("Received {} bytes ({})", bts, seq_id);
         if bts == 0 {
-            return Err(ErrorKind::BadTcpRead);
+            return match self.transport {
+                Transport::TCP(_) => Err(ErrorKind::BadTcpRead),
+            };
         } else {
             debug!(
                 "Received response ({}):\n{}",
@@ -79,7 +124,7 @@ impl TuyaDevice {
             );
         }
         debug!("Shutting down connection ({})", seq_id);
-        tcpstream.shutdown(Shutdown::Both)?;
+        tt.tt_teardown()?;
         self.mp.parse(&buf[..bts])
     }
 }
