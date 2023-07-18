@@ -43,6 +43,7 @@ mod cipher;
 mod crc;
 pub mod error;
 pub mod mesparse;
+pub mod transports;
 pub mod tuyadevice;
 
 extern crate num;
