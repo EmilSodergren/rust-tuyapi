@@ -10,11 +10,12 @@ use crate::mesparse::{CommandType, Message, MessageParser};
 use crate::{Payload, Result};
 use log::{debug, info};
 use std::io::prelude::*;
-use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream};
+use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream, UdpSocket};
 use std::time::Duration;
 
 pub enum Transport {
     TCP(u16),
+    UDP(u16),
 }
 
 pub struct TuyaDevice {
@@ -24,14 +25,14 @@ pub struct TuyaDevice {
 }
 
 trait TuyaTransport {
-    fn tt_setup(&self) -> Result<()>;
+    fn tt_setup(&self, addr: SocketAddr) -> Result<()>;
     fn tt_write(&mut self, buf: &[u8]) -> Result<usize>;
     fn tt_read(&mut self, buf: &mut [u8]) -> Result<usize>;
     fn tt_teardown(&self) -> Result<()>;
 }
 
 impl TuyaTransport for TcpStream {
-    fn tt_setup(&self) -> Result<()> {
+    fn tt_setup(&self, _addr: SocketAddr) -> Result<()> {
         self.set_nodelay(true)?;
         self.set_write_timeout(Some(Duration::new(2, 0)))?;
         self.set_read_timeout(Some(Duration::new(2, 0)))?;
@@ -45,6 +46,24 @@ impl TuyaTransport for TcpStream {
     }
     fn tt_teardown(&self) -> Result<()> {
         Ok(self.shutdown(Shutdown::Both)?)
+    }
+}
+
+impl TuyaTransport for UdpSocket {
+    fn tt_setup(&self, addr: SocketAddr) -> Result<()> {
+        self.connect(addr)?;
+        self.set_write_timeout(Some(Duration::new(2, 0)))?;
+        self.set_read_timeout(Some(Duration::new(2, 0)))?;
+        Ok(())
+    }
+    fn tt_write(&mut self, buf: &[u8]) -> Result<usize> {
+        Ok(self.send(buf)?)
+    }
+    fn tt_read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        Ok(self.recv(buf)?)
+    }
+    fn tt_teardown(&self) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -66,7 +85,7 @@ impl TuyaDevice {
 
     pub fn create_with_mp(mp: MessageParser, addr: IpAddr, transport: Transport) -> TuyaDevice {
         match transport {
-            Transport::TCP(port) => TuyaDevice {
+            Transport::TCP(port) | Transport::UDP(port) => TuyaDevice {
                 mp,
                 addr: SocketAddr::new(addr, port),
                 transport,
@@ -102,10 +121,11 @@ impl TuyaDevice {
     }
 
     fn send(&self, mes: &Message, seq_id: u32) -> Result<Vec<Message>> {
-        let mut tt = match self.transport {
-            Transport::TCP(_) => TcpStream::connect(self.addr)?,
+        let mut tt: Box<dyn TuyaTransport> = match self.transport {
+            Transport::TCP(_) => Box::new(TcpStream::connect(self.addr)?),
+            Transport::UDP(port) => Box::new(UdpSocket::bind(format!("0.0.0.0:{}", port))?),
         };
-        tt.tt_setup()?;
+        tt.tt_setup(self.addr)?;
         info!("Writing message to {} ({}):\n{}", self.addr, seq_id, &mes);
         let bts = tt.tt_write(self.mp.encode(mes, true)?.as_ref())?;
         info!("Wrote {} bytes ({})", bts, seq_id);
@@ -115,6 +135,7 @@ impl TuyaDevice {
         if bts == 0 {
             return match self.transport {
                 Transport::TCP(_) => Err(ErrorKind::BadTcpRead),
+                Transport::UDP(_) => Err(ErrorKind::BadUdpRead),
             };
         } else {
             debug!(
