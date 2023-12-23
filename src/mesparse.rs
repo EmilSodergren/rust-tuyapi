@@ -356,7 +356,14 @@ mod tests {
         let version2 = TuyaVersion::from_str("ver3.3").unwrap();
         assert_eq!(version2, TuyaVersion::ThreeThree);
 
-        assert!(TuyaVersion::from_str("3.4").is_err());
+        let version2 = TuyaVersion::from_str("ver3.3.dont-care-about-this").unwrap();
+        assert_eq!(version2, TuyaVersion::ThreeThree);
+
+        assert!(TuyaVersion::from_str("4.2").is_err());
+        assert!(TuyaVersion::from_str("version3").is_err());
+        assert!(TuyaVersion::from_str("version3,3").is_err());
+        assert!(TuyaVersion::from_str("not-a-valid-version").is_err());
+        assert!(TuyaVersion::from_str("").is_err());
     }
 
     #[test]
