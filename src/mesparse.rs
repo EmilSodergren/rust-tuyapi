@@ -89,21 +89,20 @@ impl FromStr for TuyaVersion {
 
     fn from_str(s: &str) -> Result<Self> {
         let version: Vec<&str> = s.split('.').collect();
-        if version.len() > 1 && version[0].ends_with('3') {
-            if version[1] == "1" {
-                return Ok(TuyaVersion::ThreeOne);
-            } else if version[1] == "3" {
-                return Ok(TuyaVersion::ThreeThree);
-            }
+        if version.len() < 2 || !version[0].ends_with('3') {
             return Err(ErrorKind::VersionError(
-                version[0].to_string(),
-                version[1].to_string(),
+                "Unknown".to_string(),
+                "Unknown".to_string(),
             ));
         }
-        Err(ErrorKind::VersionError(
-            "Unknown".to_string(),
-            "Unknown".to_string(),
-        ))
+        match version[1] {
+            "1" => Ok(TuyaVersion::ThreeOne),
+            "3" => Ok(TuyaVersion::ThreeThree),
+            _ => Err(ErrorKind::VersionError(
+                version[0].to_string(),
+                version[1].to_string(),
+            )),
+        }
     }
 }
 
