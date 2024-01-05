@@ -36,9 +36,9 @@ pub enum CommandType {
     Udp = 0,
     ApConfig = 1,
     Active = 2,
-    Bind = 3,
-    RenameGw = 4,
-    RenameDevice = 5,
+    SessionKeyNegotiationStart = 3,
+    SessionKeyNegotiationResponse = 4,
+    SessionKeyNegotiationFinialize = 5,
     Unbind = 6,
     Control = 7,
     Status = 8,
@@ -70,8 +70,9 @@ pub enum CommandType {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub(crate) enum TuyaVersion {
+pub enum TuyaVersion {
     ThreeOne,
+    ThreeTwo,
     ThreeThree,
 }
 
@@ -79,6 +80,7 @@ impl TuyaVersion {
     pub fn as_bytes(&self) -> &[u8] {
         match &self {
             TuyaVersion::ThreeOne => b"3.1",
+            TuyaVersion::ThreeTwo => b"3.2",
             TuyaVersion::ThreeThree => b"3.3",
         }
     }
@@ -87,8 +89,9 @@ impl TuyaVersion {
 impl FromStr for TuyaVersion {
     type Err = ErrorKind;
 
-    fn from_str(s: &str) -> Result<Self> {
-        let version: Vec<&str> = s.split('.').collect();
+    fn from_str(ver_str: &str) -> Result<Self> {
+        let version: Vec<&str> = ver_str.split('.').collect();
+        // Version is not correctly given
         if version.len() < 2 || !version[0].ends_with('3') {
             return Err(ErrorKind::VersionError(
                 "Unknown".to_string(),
@@ -97,6 +100,7 @@ impl FromStr for TuyaVersion {
         }
         match version[1] {
             "1" => Ok(TuyaVersion::ThreeOne),
+            "2" => Ok(TuyaVersion::ThreeTwo),
             "3" => Ok(TuyaVersion::ThreeThree),
             _ => Err(ErrorKind::VersionError(
                 version[0].to_string(),
@@ -155,7 +159,7 @@ pub struct MessageParser {
 /// not need decrypting.
 impl MessageParser {
     pub fn create(ver: &str, key: Option<&str>) -> Result<MessageParser> {
-        let version = TuyaVersion::from_str(ver)?;
+        let version: TuyaVersion = ver.parse()?;
         let key = verify_key(key)?;
         let cipher = TuyaCipher::create(&key, version.clone());
         Ok(MessageParser { version, cipher })
@@ -204,7 +208,7 @@ impl MessageParser {
                     mes.payload.clone().try_into()
                 }
             }
-            TuyaVersion::ThreeThree => match mes.command {
+            TuyaVersion::ThreeTwo | TuyaVersion::ThreeThree => match mes.command {
                 Some(CommandType::DpQuery) | Some(CommandType::DpRefresh) => {
                     let payload: Vec<u8> = mes.payload.clone().try_into()?;
                     self.cipher.encrypt(&payload)
@@ -219,7 +223,9 @@ impl MessageParser {
         payload_with_header.extend(self.version.as_bytes());
         match self.version {
             TuyaVersion::ThreeOne => payload_with_header.extend(vec![0; 12]),
-            TuyaVersion::ThreeThree => payload_with_header.extend(self.cipher.md5(&payload)),
+            TuyaVersion::ThreeTwo | TuyaVersion::ThreeThree => {
+                payload_with_header.extend(self.cipher.md5(&payload))
+            }
         }
         payload_with_header.extend(self.cipher.encrypt(&payload)?);
         Ok(payload_with_header)
@@ -348,15 +354,15 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_mqttversion() {
+    fn test_parse_tuyaversion() {
         let version = TuyaVersion::from_str("3.1").unwrap();
         assert_eq!(version, TuyaVersion::ThreeOne);
 
-        let version2 = TuyaVersion::from_str("ver3.3").unwrap();
-        assert_eq!(version2, TuyaVersion::ThreeThree);
+        let version = TuyaVersion::from_str("ver3.2").unwrap();
+        assert_eq!(version, TuyaVersion::ThreeTwo);
 
-        let version2 = TuyaVersion::from_str("ver3.3.dont-care-about-this").unwrap();
-        assert_eq!(version2, TuyaVersion::ThreeThree);
+        let version = TuyaVersion::from_str("ver3.3.dont-care-about-this").unwrap();
+        assert_eq!(version, TuyaVersion::ThreeThree);
 
         assert!(TuyaVersion::from_str("4.2").is_err());
         assert!(TuyaVersion::from_str("version3").is_err());

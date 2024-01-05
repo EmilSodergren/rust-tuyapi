@@ -31,6 +31,18 @@ fn encode_and_decode_message() {
 }
 
 #[test]
+fn encode_and_decode_get_message_version_three_two() {
+    let payload = create_test_payload();
+    let parser = MessageParser::create("ver3.2", Some("bbe88b3f4106d354")).unwrap();
+    let message_to_encode = Message::new(payload, CommandType::DpQuery, Some(2));
+    let encoded = parser.encode(&message_to_encode, false).unwrap();
+
+    let decoded = parser.parse(&encoded).unwrap();
+
+    assert_eq!(message_to_encode, decoded[0]);
+}
+
+#[test]
 fn encode_and_decode_get_message_version_three_three() {
     let payload = create_test_payload();
     let parser = MessageParser::create("3.3", Some("bbe88b3f4106d354")).unwrap();
