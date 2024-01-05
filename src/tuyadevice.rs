@@ -5,7 +5,7 @@
 //!
 //! The TuyaDevice is the high level device communication API. To get in to the nitty gritty
 //! details, create a MessageParser.
-use crate::mesparse::{CommandType, Message, MessageParser};
+use crate::mesparse::{CommandType, Message, MessageParser, TuyaVersion};
 use crate::transports::{Transport, TuyaTransport};
 use crate::{Payload, Result};
 use log::{debug, info};
@@ -15,12 +15,18 @@ pub struct TuyaDevice {
     mp: MessageParser,
     addr: SocketAddr,
     transport: Transport,
+    ver: TuyaVersion,
 }
 
 impl TuyaDevice {
     pub fn create(ver: &str, key: Option<&str>, addr: IpAddr) -> Result<TuyaDevice> {
         let mp = MessageParser::create(ver, key)?;
-        Ok(TuyaDevice::create_with_mp(mp, addr, Transport::TCP(6668)))
+        Ok(TuyaDevice::create_with_mp(
+            mp,
+            addr,
+            Transport::TCP(6668),
+            ver.parse()?,
+        ))
     }
 
     pub fn create_with_transport(
@@ -30,21 +36,56 @@ impl TuyaDevice {
         transport: Transport,
     ) -> Result<TuyaDevice> {
         let mp = MessageParser::create(ver, key)?;
-        Ok(TuyaDevice::create_with_mp(mp, addr, transport))
+        Ok(TuyaDevice::create_with_mp(
+            mp,
+            addr,
+            transport,
+            ver.parse()?,
+        ))
     }
 
-    pub fn create_with_mp(mp: MessageParser, addr: IpAddr, transport: Transport) -> TuyaDevice {
+    pub fn create_with_mp(
+        mp: MessageParser,
+        addr: IpAddr,
+        transport: Transport,
+        ver: TuyaVersion,
+    ) -> TuyaDevice {
         match transport {
             Transport::TCP(port) | Transport::UDP(port) => TuyaDevice {
                 mp,
                 addr: SocketAddr::new(addr, port),
                 transport,
+                ver,
             },
         }
     }
 
+    fn set_commandtype(&self) -> CommandType {
+        match self.ver {
+            TuyaVersion::ThreeOne | TuyaVersion::ThreeTwo | TuyaVersion::ThreeThree => {
+                CommandType::Control
+            }
+        }
+    }
+
+    fn get_commandtype(&self) -> CommandType {
+        match self.ver {
+            TuyaVersion::ThreeOne | TuyaVersion::ThreeThree => CommandType::DpQuery,
+            TuyaVersion::ThreeTwo => CommandType::Control,
+        }
+    }
+
+    fn refresh_commandtype(&self) -> CommandType {
+        match self.ver {
+            TuyaVersion::ThreeOne | TuyaVersion::ThreeTwo | TuyaVersion::ThreeThree => {
+                CommandType::DpRefresh
+            }
+        }
+    }
+
+    //TODO: There are code duplication here... do we really need three methods??
     pub fn set(&self, tuya_payload: Payload, seq_id: u32) -> Result<()> {
-        let mes = Message::new(tuya_payload, CommandType::Control, Some(seq_id));
+        let mes = Message::new(tuya_payload, self.set_commandtype(), Some(seq_id));
         let replies = self.send(&mes, seq_id)?;
         replies
             .iter()
@@ -53,7 +94,7 @@ impl TuyaDevice {
     }
 
     pub fn get(&self, tuya_payload: Payload, seq_id: u32) -> Result<Vec<Message>> {
-        let mes = Message::new(tuya_payload, CommandType::DpQuery, Some(seq_id));
+        let mes = Message::new(tuya_payload, self.get_commandtype(), Some(seq_id));
         let replies = self.send(&mes, seq_id)?;
         replies
             .iter()
@@ -62,7 +103,7 @@ impl TuyaDevice {
     }
 
     pub fn refresh(&self, tuya_payload: Payload, seq_id: u32) -> Result<Vec<Message>> {
-        let mes = Message::new(tuya_payload, CommandType::DpRefresh, Some(seq_id));
+        let mes = Message::new(tuya_payload, self.refresh_commandtype(), Some(seq_id));
         let replies = self.send(&mes, seq_id)?;
         replies
             .iter()

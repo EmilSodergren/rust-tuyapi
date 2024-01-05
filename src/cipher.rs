@@ -14,7 +14,7 @@ fn maybe_strip_header(version: &TuyaVersion, data: &[u8]) -> Vec<u8> {
     if data.len() > 3 && &data[..3] == version.as_bytes() {
         match version {
             TuyaVersion::ThreeOne => data.split_at(19).1.to_vec(),
-            TuyaVersion::ThreeThree => data.split_at(15).1.to_vec(),
+            TuyaVersion::ThreeTwo | TuyaVersion::ThreeThree => data.split_at(15).1.to_vec(),
         }
     } else {
         data.to_vec()
@@ -34,7 +34,7 @@ impl TuyaCipher {
         let res = encrypt(self.cipher, &self.key, None, data)?;
         match self.version {
             TuyaVersion::ThreeOne => Ok(general_purpose::STANDARD.encode(res).as_bytes().to_vec()),
-            TuyaVersion::ThreeThree => Ok(res),
+            TuyaVersion::ThreeTwo | TuyaVersion::ThreeThree => Ok(res),
         }
     }
 
@@ -44,7 +44,7 @@ impl TuyaCipher {
         // 3.1 is base64 encoded, 3.3 is not
         let data = match self.version {
             TuyaVersion::ThreeOne => general_purpose::STANDARD.decode(&data)?,
-            TuyaVersion::ThreeThree => data.to_vec(),
+            TuyaVersion::ThreeTwo | TuyaVersion::ThreeThree => data.to_vec(),
         };
         let res = decrypt(self.cipher, &self.key, None, &data)?;
 
