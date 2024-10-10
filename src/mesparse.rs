@@ -3,7 +3,6 @@
 //! The normal user should not need to interact with this directly to communicate with Tuya
 //! devices, but rather create an instance of the TuyaDevice struct.
 use crate::cipher::TuyaCipher;
-use crate::crc::crc;
 use crate::error::ErrorKind;
 use crate::{Payload, Result};
 use hex::FromHex;
@@ -186,7 +185,7 @@ impl MessageParser {
             encoded.extend(&ret_code.to_be_bytes());
         }
         encoded.extend(payload);
-        encoded.extend(crc(&encoded).to_be_bytes().iter());
+        encoded.extend(crc32fast::hash(&encoded).to_be_bytes().iter());
         encoded.extend_from_slice(&*SUFFIX_BYTES);
         debug!(
             "Encoded message ({}):\n{}",
@@ -264,12 +263,9 @@ impl MessageParser {
             };
             let (payload, rc) = recv_data.split_at(recv_data.len() - 4);
             let recv_crc = u32::from_be_bytes([rc[0], rc[1], rc[2], rc[3]]);
-            if crc(&orig_buf[0..recv_data.len() + 12 + ret_len]) != recv_crc {
-                error!(
-                    "Found CRC: {:#x}, Expected CRC: {:#x}",
-                    recv_crc,
-                    crc(&orig_buf[0..recv_data.len() + 12 + ret_len])
-                );
+            let crc = crc32fast::hash(&orig_buf[0..recv_data.len() + 12 + ret_len]);
+            if crc != recv_crc {
+                error!("Found CRC: {:#x}, Expected CRC: {:#x}", recv_crc, crc);
                 // I hijack the ErrorKind::ManyMN here to propagate a CRC error
                 // TODO: should probably create and use a special CRC error here
                 return Err(nom::Err::Failure(nom::error::Error::new(
