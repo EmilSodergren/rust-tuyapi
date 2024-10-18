@@ -1,0 +1,36 @@
+name: Rust tuyapi
+
+on: [push, pull_request]
+
+jobs:
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.channel }}
+          target: ${{ matrix.target }}
+      - uses: action-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --target ${{ matrix.target }} --release --all-features
+
+    strategy:
+      fail-fast: true
+      matrix:
+        channel: [stable, beta, nightly]
+        target:
+          # WASM, off by default as most rust projects aren't compatible yet.
+          # - wasm32-unknown-emscripten
+          # Linux
+          # - aarch64-unknown-linux-gnu
+          # - aarch64-unknown-linux-musl
+          # - arm-unknown-linux-gnueabi
+          - arm-unknown-linux-gnueabihf
+          - armv7-unknown-linux-gnueabihf
+          # - armv7-unknown-linux-musleabihf
+          - x86_64-unknown-linux-gnu
+          # - x86_64-unknown-linux-musl
