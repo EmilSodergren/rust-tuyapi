@@ -25,9 +25,17 @@ use std::str::FromStr;
 
 const UDP_KEY: &str = "yGAdlopoPVldABfn";
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+struct SurroundBytes {
+    prefix: [u8; 4],
+    suffix: [u8; 4],
+}
+
 lazy_static! {
-    static ref PREFIX_BYTES: [u8; 4] = <[u8; 4]>::from_hex("000055AA").unwrap();
-    static ref SUFFIX_BYTES: [u8; 4] = <[u8; 4]>::from_hex("0000AA55").unwrap();
+    static ref BYTES: SurroundBytes = SurroundBytes {
+        prefix: <[u8; 4]>::from_hex("000055AA").unwrap(),
+        suffix: <[u8; 4]>::from_hex("0000AA55").unwrap()
+    };
 }
 
 /// Human readable definitions of command bytes.
@@ -152,6 +160,7 @@ impl Message {
 pub struct MessageParser {
     version: TuyaVersion,
     cipher: TuyaCipher,
+    sb: SurroundBytes,
 }
 
 /// MessageParser encodes and parses messages sent to and from Tuya devices. It may or may not
@@ -162,12 +171,19 @@ impl MessageParser {
         let version: TuyaVersion = ver.parse()?;
         let key = verify_key(key)?;
         let cipher = TuyaCipher::create(&key, version.clone());
-        Ok(MessageParser { version, cipher })
+        let sb = match version {
+            TuyaVersion::ThreeOne | TuyaVersion::ThreeTwo | TuyaVersion::ThreeThree => *BYTES,
+        };
+        Ok(MessageParser {
+            version,
+            cipher,
+            sb,
+        })
     }
 
     pub fn encode(&self, mes: &Message, encrypt: bool) -> Result<Vec<u8>> {
         let mut encoded: Vec<u8> = vec![];
-        encoded.extend_from_slice(&*PREFIX_BYTES);
+        encoded.extend_from_slice(&self.sb.prefix);
         match mes.seq_nr {
             Some(nr) => encoded.extend(&nr.to_be_bytes()),
             None => encoded.extend(&0_u32.to_be_bytes()),
@@ -189,7 +205,7 @@ impl MessageParser {
         }
         encoded.extend(payload);
         encoded.extend(crc32fast::hash(&encoded).to_be_bytes().iter());
-        encoded.extend_from_slice(&*SUFFIX_BYTES);
+        encoded.extend_from_slice(&self.sb.suffix);
         debug!(
             "Encoded message ({}):\n{}",
             mes.seq_nr.unwrap_or(0),
@@ -248,11 +264,11 @@ impl MessageParser {
         // TODO: can this be statically initialized??
         let be_u32_minus4 = map(be_u32, |n: u32| n - 4);
         let (buf, vec) = many1(tuple((
-            tag(*PREFIX_BYTES),
+            tag(self.sb.prefix),
             be_u32,
             be_u32,
             length_data(be_u32_minus4),
-            tag(*SUFFIX_BYTES),
+            tag(self.sb.suffix),
         )))(orig_buf)?;
         let mut messages = vec![];
         for (_, seq_nr, command, recv_data, _) in vec {
