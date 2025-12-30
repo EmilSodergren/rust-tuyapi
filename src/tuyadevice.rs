@@ -52,6 +52,15 @@ impl TuyaDevice {
         Ok(())
     }
 
+    pub fn set_new(&self, tuya_payload: Payload, seq_id: u32) -> Result<()> {
+        let mes = Message::new(tuya_payload, CommandType::ControlNew, Some(seq_id));
+        let replies = self.send(&mes, seq_id)?;
+        replies
+            .iter()
+            .for_each(|mes| info!("Decoded response ({}):\n{}", seq_id, mes));
+        Ok(())
+    }
+
     pub fn get(&self, tuya_payload: Payload, seq_id: u32) -> Result<Vec<Message>> {
         let mes = Message::new(tuya_payload, CommandType::DpQuery, Some(seq_id));
         let replies = self.send(&mes, seq_id)?;
